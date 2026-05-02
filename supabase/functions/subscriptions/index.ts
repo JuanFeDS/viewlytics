@@ -64,10 +64,12 @@ Deno.serve(async (req) => {
       const channelId = segments[1]
       const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '5'), 10)
 
+      console.log('[channel/recent] channelId:', channelId, 'token prefix:', token.slice(0, 10))
       const chData = await ytGet('channels', token, {
         part: 'contentDetails,snippet',
         id: channelId,
       })
+      console.log('[channel/recent] chData:', JSON.stringify(chData).slice(0, 300))
       if (chData.error) return err(`YouTube: ${chData.error.message}`, 400)
       const channel = chData.items?.[0]
       if (!channel) return err('Channel not found', 404)
