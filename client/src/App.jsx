@@ -66,7 +66,7 @@ function AppLayout() {
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/viewlytics">
         <AuthProvider>
           <AppLayout />
         </AuthProvider>
