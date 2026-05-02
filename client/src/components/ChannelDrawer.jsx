@@ -46,7 +46,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
     setAdded({})
     api.get(`/subscriptions/channel/${channel.channelId}/recent`)
       .then(r => setData(r.data))
-      .catch(() => setData({ videos: [] }))
+      .catch(e => setData({ videos: [], error: e.response?.data?.error ?? e.message }))
       .finally(() => setLoading(false))
   }, [open, channel?.channelId])
 
@@ -144,6 +144,8 @@ export default function ChannelDrawer({ channel, open, onClose }) {
           <div className="px-5 space-y-4 pb-6">
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => <VideoSkeleton key={i} />)
+            ) : data?.error ? (
+              <p className="text-sm text-destructive text-center py-8">{data.error}</p>
             ) : !data?.videos?.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">Sin videos recientes</p>
             ) : (
