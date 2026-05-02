@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user ?? null)
       if (event === 'SIGNED_IN' && session?.provider_token) {
         await supabase.from('profiles').upsert({
           id: session.user.id,
@@ -24,7 +25,6 @@ export function AuthProvider({ children }) {
           updated_at: new Date().toISOString(),
         })
       }
-      setUser(session?.user ?? null)
     })
 
     return () => subscription.unsubscribe()

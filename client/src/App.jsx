@@ -37,7 +37,11 @@ function PageHeader() {
 function AppLayout() {
   const { user } = useAuth()
 
-  if (user === undefined) return null
+  if (user === undefined) return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    </div>
+  )
   if (!user) return <Login />
 
   return (

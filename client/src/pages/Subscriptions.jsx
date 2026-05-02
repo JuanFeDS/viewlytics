@@ -36,12 +36,23 @@ export default function Subscriptions() {
   const [selectedChannel, setSelectedChannel] = useState(null)
 
   useEffect(() => {
-    api.get('/subscriptions').then(r => {
-      setSubscriptions(r.data.subscriptions)
-      setCategories(r.data.categories)
-      setMappings(r.data.mappings)
-      setLoading(false)
-    })
+    const load = (attempt = 0) => {
+      api.get('/subscriptions')
+        .then(r => {
+          setSubscriptions(r.data.subscriptions)
+          setCategories(r.data.categories)
+          setMappings(r.data.mappings)
+          setLoading(false)
+        })
+        .catch(err => {
+          if (err.response?.status === 401 && attempt < 3) {
+            setTimeout(() => load(attempt + 1), 1500)
+          } else {
+            setLoading(false)
+          }
+        })
+    }
+    load()
   }, [])
 
   const createCategory = async () => {
