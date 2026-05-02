@@ -88,10 +88,10 @@ export default function AppSidebar() {
         {user && (
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center size-8 rounded-full bg-primary text-primary-foreground text-xs font-semibold shrink-0">
-              {user.name?.charAt(0).toUpperCase()}
+              {(user.user_metadata?.full_name ?? user.email ?? '?').charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate leading-tight">{user.name}</p>
+              <p className="text-sm font-medium truncate leading-tight">{user.user_metadata?.full_name ?? user.email}</p>
               <p className="text-xs text-muted-foreground truncate leading-tight">{user.email}</p>
             </div>
             <button
