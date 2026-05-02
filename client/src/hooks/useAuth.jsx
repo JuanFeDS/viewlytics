@@ -31,7 +31,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = async () => {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'local' })
+    setUser(null)
   }
 
   return (
