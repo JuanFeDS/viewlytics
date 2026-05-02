@@ -30,29 +30,21 @@ export default function Subscriptions() {
   const [categories, setCategories] = useState([])
   const [mappings, setMappings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [newCatName, setNewCatName] = useState('')
   const [filterCat, setFilterCat] = useState(null)
   const [search, setSearch] = useState('')
   const [selectedChannel, setSelectedChannel] = useState(null)
 
   useEffect(() => {
-    const load = (attempt = 0) => {
-      api.get('/subscriptions')
-        .then(r => {
-          setSubscriptions(r.data.subscriptions)
-          setCategories(r.data.categories)
-          setMappings(r.data.mappings)
-          setLoading(false)
-        })
-        .catch(err => {
-          if (err.response?.status === 401 && attempt < 3) {
-            setTimeout(() => load(attempt + 1), 1500)
-          } else {
-            setLoading(false)
-          }
-        })
-    }
-    load()
+    api.get('/subscriptions')
+      .then(r => {
+        setSubscriptions(r.data.subscriptions ?? [])
+        setCategories(r.data.categories ?? [])
+        setMappings(r.data.mappings ?? [])
+      })
+      .catch(e => setError(e.response?.data?.error ?? e.message))
+      .finally(() => setLoading(false))
   }, [])
 
   const createCategory = async () => {
@@ -155,6 +147,10 @@ export default function Subscriptions() {
           </Button>
         ))}
       </div>
+
+      {error && (
+        <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{error}</p>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
