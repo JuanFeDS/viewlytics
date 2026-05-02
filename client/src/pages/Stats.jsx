@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { Users, Clock, Star, Tag, CheckCircle, BarChart2, RefreshCw, Ghost, TrendingUp, TrendingDown, Flame, HelpCircle, ThumbsUp, BookmarkCheck, ListVideo } from 'lucide-react'
-import api from '@/lib/api'
+import api, { streamSSE } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -471,6 +471,7 @@ export default function Stats() {
   const [loadingChannels, setLoadingChannels] = useState(false)
   const [activeTab, setActiveTab] = useState('resumen')
   const { theme } = useTheme()
+  const abortRef = useRef(null)
 
   // Load summary on mount
   useEffect(() => {
@@ -494,34 +495,34 @@ export default function Stats() {
 
   const loadChannelStats = useCallback((force = false) => {
     if (!force && channelData) return
+
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
+
     setLoadingChannels(true)
     setLoadProgress(0)
     setLoadMessage('Iniciando...')
 
-    const url = `/api/channel-stats/stream${force ? '?refresh=1' : ''}`
-    const es = new EventSource(url, { withCredentials: true })
-
-    es.onmessage = (e) => {
-      const payload = JSON.parse(e.data)
-      setLoadProgress(payload.progress)
-      setLoadMessage(payload.message)
-
-      if (payload.progress === 100 && payload.result) {
-        setChannelData(payload.result)
-        setLoadingChannels(false)
-        es.close()
+    ;(async () => {
+      try {
+        for await (const payload of streamSSE('/channel-stats', force ? { refresh: '1' } : {}, abortRef.current.signal)) {
+          setLoadProgress(payload.progress)
+          setLoadMessage(payload.message)
+          if (payload.progress === 100 && payload.result) {
+            setChannelData(payload.result)
+            setLoadingChannels(false)
+          }
+          if (payload.progress === -1) {
+            setLoadingChannels(false)
+          }
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          setLoadingChannels(false)
+          setLoadMessage('Error de conexión')
+        }
       }
-      if (payload.progress === -1) {
-        setLoadingChannels(false)
-        es.close()
-      }
-    }
-
-    es.onerror = () => {
-      setLoadingChannels(false)
-      setLoadMessage('Error de conexión')
-      es.close()
-    }
+    })()
   }, [channelData])
 
   const handleTabChange = (tab) => {
