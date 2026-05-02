@@ -1,4 +1,6 @@
 node_modules/
+docs/test-*.html
+docs/test-*.js
 .env
 server/.env
 server/db/*.db
