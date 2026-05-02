@@ -30,9 +30,10 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const logout = async () => {
-    await supabase.auth.signOut({ scope: 'local' })
-    window.location.replace(window.location.origin + '/viewlytics/')
+  const logout = () => {
+    supabase.auth.signOut({ scope: 'local' }).catch(() => {}).finally(() => {
+      window.location.replace(window.location.origin + '/viewlytics/')
+    })
   }
 
   return (
