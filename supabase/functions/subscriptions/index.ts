@@ -80,6 +80,8 @@ Deno.serve(async (req) => {
         playlistId: uploadsId,
         maxResults: String(limit),
       })
+      console.log('[channel/recent] plData:', JSON.stringify(plData).slice(0, 300))
+      if (plData.error) return err(`YouTube playlist: ${plData.error.message}`, 400)
 
       const plItems = (plData.items ?? []).filter((i: any) => i.contentDetails?.videoId)
       let vidMap: Record<string, any> = {}
