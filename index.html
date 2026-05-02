@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/viewlytics/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viewlytics</title>
+    <script>
+      (function(l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&')
+          })
+          window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded[0] + (decoded[1] ? '?' + decoded[1] : '') + l.hash
+          )
+        }
+      }(window.location))
+    </script>
+    <script type="module" crossorigin src="/viewlytics/assets/index-DNVjI0Gl.js"></script>
+    <link rel="stylesheet" crossorigin href="/viewlytics/assets/index-CI2PDbNm.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
