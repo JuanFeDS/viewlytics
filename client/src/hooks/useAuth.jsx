@@ -15,9 +15,15 @@ export function AuthProvider({ children }) {
       setUser(session?.user ?? null)
 
       if (event === 'SIGNED_IN' && session?.provider_token) {
-        await supabase
-          .from('profiles')
-          .upsert({ id: session.user.id, provider_token: session.provider_token })
+        await supabase.from('profiles').upsert({
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? null,
+          avatar_url: session.user.user_metadata?.avatar_url ?? null,
+          provider_token: session.provider_token,
+          provider_refresh_token: session.provider_refresh_token ?? null,
+          updated_at: new Date().toISOString(),
+        })
       }
     })
 
