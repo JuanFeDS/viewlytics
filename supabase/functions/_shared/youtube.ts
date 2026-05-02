@@ -41,21 +41,25 @@ export async function getProviderToken(userId: string, supabase: ReturnType<type
 
   if (!data?.provider_token) return null
 
-  // Token still valid with 5-min buffer
+  const token = data.provider_token as string
+
+  // Token still valid (with 5-min buffer) — return immediately
   if (data.token_expires_at) {
     const expiresAt = new Date(data.token_expires_at).getTime()
-    if (expiresAt > Date.now() + 5 * 60 * 1000) return data.provider_token as string
+    if (expiresAt > Date.now() + 5 * 60 * 1000) return token
   } else {
-    // No expiry stored yet — assume valid
-    return data.provider_token as string
+    return token
   }
 
-  // Token expired — refresh via Google
-  const refreshToken = data.provider_refresh_token
+  // Token appears expired — attempt refresh if Google secrets are available
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
 
-  if (!refreshToken || !clientId || !clientSecret) return null
+  if (!data.provider_refresh_token || !clientId || !clientSecret) {
+    // No way to refresh — return the stored token and let the YouTube API
+    // reject with a clear error rather than failing silently here
+    return token
+  }
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -63,13 +67,13 @@ export async function getProviderToken(userId: string, supabase: ReturnType<type
     body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
-      refresh_token: refreshToken,
+      refresh_token: data.provider_refresh_token,
       grant_type: 'refresh_token',
     }),
   })
 
   const tokens = await res.json()
-  if (!tokens.access_token) return null
+  if (!tokens.access_token) return token  // refresh failed — return stored token as fallback
 
   await supabase.from('profiles').update({
     provider_token: tokens.access_token,
