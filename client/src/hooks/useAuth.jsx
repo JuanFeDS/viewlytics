@@ -12,8 +12,6 @@ export function AuthProvider({ children }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null)
-
       if (event === 'SIGNED_IN' && session?.provider_token) {
         await supabase.from('profiles').upsert({
           id: session.user.id,
@@ -22,9 +20,11 @@ export function AuthProvider({ children }) {
           avatar_url: session.user.user_metadata?.avatar_url ?? null,
           provider_token: session.provider_token,
           provider_refresh_token: session.provider_refresh_token ?? null,
+          token_expires_at: new Date(Date.now() + 55 * 60 * 1000).toISOString(),
           updated_at: new Date().toISOString(),
         })
       }
+      setUser(session?.user ?? null)
     })
 
     return () => subscription.unsubscribe()
@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     await supabase.auth.signOut({ scope: 'local' })
-    setUser(null)
+    window.location.replace(window.location.origin + '/viewlytics/')
   }
 
   return (

@@ -35,10 +35,48 @@ export async function ytGetAll(
 export async function getProviderToken(userId: string, supabase: ReturnType<typeof import('./auth.ts').serviceClient>) {
   const { data } = await supabase
     .from('profiles')
-    .select('provider_token')
+    .select('provider_token, provider_refresh_token, token_expires_at')
     .eq('id', userId)
     .single()
-  return data?.provider_token as string | null
+
+  if (!data?.provider_token) return null
+
+  // Token still valid with 5-min buffer
+  if (data.token_expires_at) {
+    const expiresAt = new Date(data.token_expires_at).getTime()
+    if (expiresAt > Date.now() + 5 * 60 * 1000) return data.provider_token as string
+  } else {
+    // No expiry stored yet — assume valid
+    return data.provider_token as string
+  }
+
+  // Token expired — refresh via Google
+  const refreshToken = data.provider_refresh_token
+  const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+
+  if (!refreshToken || !clientId || !clientSecret) return null
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  const tokens = await res.json()
+  if (!tokens.access_token) return null
+
+  await supabase.from('profiles').update({
+    provider_token: tokens.access_token,
+    token_expires_at: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString(),
+  }).eq('id', userId)
+
+  return tokens.access_token as string
 }
 
 export async function upsertChannelAndVideo(
