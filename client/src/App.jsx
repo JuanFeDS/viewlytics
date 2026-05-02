@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { ThemeProvider } from '@/hooks/useTheme'
 import AppSidebar from '@/components/layout/AppSidebar'
 import Login from '@/pages/Login'
+import { LogOut } from 'lucide-react'
 import Subscriptions from '@/pages/Subscriptions'
 import Playlists from '@/pages/Playlists'
 import Pending from '@/pages/Pending'
@@ -24,12 +25,20 @@ const pageTitles = {
 
 function PageHeader() {
   const location = useLocation()
+  const { logout } = useAuth()
   const title = pageTitles[location.pathname] || ''
   return (
     <header className="flex h-14 items-center gap-3 border-b px-4 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-5" />
-      <h1 className="text-sm font-semibold">{title}</h1>
+      <h1 className="text-sm font-semibold flex-1">{title}</h1>
+      <button
+        onClick={logout}
+        className="text-muted-foreground hover:text-foreground transition-colors p-1"
+        title="Cerrar sesión"
+      >
+        <LogOut className="size-4" />
+      </button>
     </header>
   )
 }
