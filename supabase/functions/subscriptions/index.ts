@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
         part: 'contentDetails,snippet',
         id: channelId,
       })
+      if (chData.error) return err(`YouTube: ${chData.error.message}`, 400)
       const channel = chData.items?.[0]
       if (!channel) return err('Channel not found', 404)
 
