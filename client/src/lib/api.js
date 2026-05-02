@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
-const api = axios.create({ baseURL: FUNCTIONS_URL })
+const api = axios.create({ baseURL: FUNCTIONS_URL, timeout: 30000 })
 
 api.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession()
