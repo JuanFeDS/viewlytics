@@ -17,8 +17,7 @@ export function AuthProvider({ children }) {
       if (event === 'SIGNED_IN' && session?.provider_token) {
         await supabase
           .from('profiles')
-          .update({ provider_token: session.provider_token })
-          .eq('id', session.user.id)
+          .upsert({ id: session.user.id, provider_token: session.provider_token })
       }
     })
 
