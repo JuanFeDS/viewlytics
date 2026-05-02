@@ -31,9 +31,14 @@ export default function Search() {
     if (!query.trim()) return
     setLoading(true)
     setSearched(true)
-    const { data } = await api.get('/search', { params: { q: query } })
-    setResults(data)
-    setLoading(false)
+    try {
+      const { data } = await api.get('/search', { params: { q: query } })
+      setResults(data)
+    } catch {
+      setResults([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const addToPending = async (item) => {

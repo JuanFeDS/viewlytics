@@ -23,12 +23,13 @@ function FavoriteSkeleton() {
 export default function Favorites() {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    api.get('/favorites').then(r => {
-      setVideos(r.data)
-      setLoading(false)
-    })
+    api.get('/favorites')
+      .then(r => setVideos(r.data))
+      .catch(e => setError(e.response?.data?.error ?? e.message))
+      .finally(() => setLoading(false))
   }, [])
 
   const remove = async (videoId) => {
@@ -41,6 +42,10 @@ export default function Favorites() {
       <Badge variant="outline" className="gap-1">
         <Star className="size-3" />{loading ? '...' : videos.length} videos guardados
       </Badge>
+
+      {error && (
+        <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{error}</p>
+      )}
 
       <ScrollArea className="h-[calc(100vh-160px)]">
         {loading ? (

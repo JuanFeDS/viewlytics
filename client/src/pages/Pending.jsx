@@ -65,12 +65,13 @@ function VideoItem({ v, onWatched, onRemove }) {
 export default function Pending() {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    api.get('/pending').then(r => {
-      setVideos(r.data)
-      setLoading(false)
-    })
+    api.get('/pending')
+      .then(r => setVideos(r.data))
+      .catch(e => setError(e.response?.data?.error ?? e.message))
+      .finally(() => setLoading(false))
   }, [])
 
   const markWatched = async (id) => {
@@ -92,6 +93,10 @@ export default function Pending() {
         <Badge variant="outline" className="gap-1"><Clock className="size-3" />{pending.length} por ver</Badge>
         <Badge variant="secondary" className="gap-1"><Star className="size-3" />{watched.length} vistos</Badge>
       </div>
+
+      {error && (
+        <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{error}</p>
+      )}
 
       <Tabs defaultValue="pending">
         <TabsList>
