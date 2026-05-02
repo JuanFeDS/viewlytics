@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { PlayCircle, Users, ListVideo, Clock, Search, Star, LogOut, Sun, Moon, BarChart2 } from 'lucide-react'
+import { PlayCircle, Users, ListVideo, Clock, Search, Star, Sun, Moon, BarChart2 } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -26,7 +26,7 @@ const navItems = [
 ]
 
 export default function AppSidebar() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { theme, toggle } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
@@ -86,7 +86,7 @@ export default function AppSidebar() {
         </SidebarMenuButton>
 
         {user && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 px-1">
             <div className="flex items-center justify-center size-8 rounded-full bg-primary text-primary-foreground text-xs font-semibold shrink-0">
               {(user.user_metadata?.full_name ?? user.email ?? '?').charAt(0).toUpperCase()}
             </div>
@@ -94,13 +94,6 @@ export default function AppSidebar() {
               <p className="text-sm font-medium truncate leading-tight">{user.user_metadata?.full_name ?? user.email}</p>
               <p className="text-xs text-muted-foreground truncate leading-tight">{user.email}</p>
             </div>
-            <button
-              onClick={logout}
-              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              title="Cerrar sesión"
-            >
-              <LogOut className="size-4" />
-            </button>
           </div>
         )}
       </SidebarFooter>

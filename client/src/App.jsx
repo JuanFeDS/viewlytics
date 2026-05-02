@@ -25,20 +25,29 @@ const pageTitles = {
 
 function PageHeader() {
   const location = useLocation()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const title = pageTitles[location.pathname] || ''
+  const initial = (user?.user_metadata?.full_name ?? user?.email ?? '?').charAt(0).toUpperCase()
+
   return (
     <header className="flex h-14 items-center gap-3 border-b px-4 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-5" />
       <h1 className="text-sm font-semibold flex-1">{title}</h1>
-      <button
-        onClick={logout}
-        className="text-muted-foreground hover:text-foreground transition-colors p-1"
-        title="Cerrar sesión"
-      >
-        <LogOut className="size-4" />
-      </button>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center size-7 rounded-full bg-primary text-primary-foreground text-xs font-semibold select-none">
+          {initial}
+        </div>
+        <Separator orientation="vertical" className="h-5" />
+        <button
+          onClick={logout}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 px-1.5 rounded-md hover:bg-accent"
+          title="Cerrar sesión"
+        >
+          <LogOut className="size-3.5" />
+          <span>Salir</span>
+        </button>
+      </div>
     </header>
   )
 }
