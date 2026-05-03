@@ -41,13 +41,18 @@ export default function ChannelDrawer({ channel, open, onClose }) {
   // Fetch channel data
   useEffect(() => {
     if (!open || !channel?.channelId) return
+    const controller = new AbortController()
     setData(null)
     setLoading(true)
     setAdded({})
-    api.get(`/subscriptions/channel/${channel.channelId}/recent`)
+    api.get(`/subscriptions/channel/${channel.channelId}/recent`, { signal: controller.signal })
       .then(r => setData(r.data))
-      .catch(e => setData({ videos: [], error: e.response?.data?.error ?? e.message }))
+      .catch(e => {
+        if (e.code === 'ERR_CANCELED') return
+        setData({ videos: [], error: e.response?.data?.error ?? e.message })
+      })
       .finally(() => setLoading(false))
+    return () => controller.abort()
   }, [open, channel?.channelId])
 
   // Close on Escape
