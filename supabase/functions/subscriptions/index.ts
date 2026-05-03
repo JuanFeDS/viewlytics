@@ -59,65 +59,35 @@ Deno.serve(async (req) => {
 
     if (segments[0] === 'channel' && segments[2] === 'recent') {
       const channelId = segments[1]
+      if (!channelId) return err('Missing channelId', 400)
       const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '5'), 10)
 
-      const abort = new AbortController()
-      const timer = setTimeout(() => abort.abort(), 8000)
-      let xml: string
-      try {
-        const feedRes = await fetch(
-          `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
-          { signal: abort.signal, headers: { 'User-Agent': 'Mozilla/5.0' } }
-        )
-        clearTimeout(timer)
-        if (!feedRes.ok) return err(`Feed error: ${feedRes.status}`, 400)
-        xml = await feedRes.text()
-        if (!xml.includes('<feed')) return err('Feed returned invalid response', 502)
-      } catch (e) {
-        clearTimeout(timer)
-        return err(`Feed unavailable: ${e.message}`, 502)
-      }
+      const apiKey = Deno.env.get('YOUTUBE_API_KEY')
+      if (!apiKey) return err('YouTube API key not configured', 500)
 
-      const beforeEntries = xml.split('<entry>')[0]
-      const channelTitle = beforeEntries.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/)?.[1]
-        ?? beforeEntries.match(/<title>(.*?)<\/title>/)?.[1]
-        ?? ''
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
+      searchUrl.searchParams.set('key', apiKey)
+      searchUrl.searchParams.set('channelId', channelId)
+      searchUrl.searchParams.set('part', 'snippet')
+      searchUrl.searchParams.set('order', 'date')
+      searchUrl.searchParams.set('type', 'video')
+      searchUrl.searchParams.set('maxResults', String(limit))
 
-      const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)]
-        .slice(0, limit)
-        .map(([, e]) => ({
-          videoId: e.match(/<yt:videoId>(.*?)<\/yt:videoId>/)?.[1] ?? '',
-          title: e.match(/<media:title><!\[CDATA\[([\s\S]*?)\]\]><\/media:title>/)?.[1]
-            ?? e.match(/<media:title>(.*?)<\/media:title>/)?.[1] ?? '',
-          thumbnail: e.match(/<media:thumbnail url="([^"]+)"/)?.[1] ?? '',
-          publishedAt: e.match(/<published>(.*?)<\/published>/)?.[1] ?? '',
-        }))
-        .filter(v => v.videoId)
+      const searchRes = await fetch(searchUrl.toString())
+      if (!searchRes.ok) return err(`YouTube API error: ${searchRes.status}`, 502)
+      const searchData = await searchRes.json()
+      if (searchData.error) return err(searchData.error.message, 502)
 
-      if (entries.length === 0) return json({ channel: { id: channelId, title: channelTitle }, videos: [] })
-
-      const token = await getProviderToken(user.id, serviceClient())
-      let vidMap: Record<string, any> = {}
-      if (token) {
-        const videoIds = entries.map(e => e.videoId).join(',')
-        const vidData = await ytGet('videos', token, { part: 'contentDetails,statistics', id: videoIds })
-        ;(vidData.items ?? []).forEach((v: any) => { vidMap[v.id] = v })
-      }
-
-      const videos = entries.map(e => {
-        const vid = vidMap[e.videoId] ?? {}
-        return {
-          videoId: e.videoId,
-          title: e.title,
-          thumbnail: e.thumbnail,
-          publishedAt: e.publishedAt,
-          duration: vid.contentDetails?.duration,
-          viewCount: vid.statistics?.viewCount,
-        }
-      })
+      const items = searchData.items ?? []
+      const videos = items.map((item: any) => ({
+        videoId: item.id?.videoId ?? '',
+        title: item.snippet?.title ?? '',
+        thumbnail: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? '',
+        publishedAt: item.snippet?.publishedAt ?? '',
+      })).filter((v: any) => v.videoId)
 
       return json({
-        channel: { id: channelId, title: channelTitle, thumbnail: '', description: '' },
+        channel: { id: channelId, title: items[0]?.snippet?.channelTitle ?? '' },
         videos,
       })
     }
