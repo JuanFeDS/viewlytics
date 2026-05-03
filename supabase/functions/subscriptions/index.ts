@@ -73,9 +73,18 @@ Deno.serve(async (req) => {
       searchUrl.searchParams.set('type', 'video')
       searchUrl.searchParams.set('maxResults', String(limit))
 
-      const searchRes = await fetch(searchUrl.toString())
-      if (!searchRes.ok) return err(`YouTube API error: ${searchRes.status}`, 502)
-      const searchData = await searchRes.json()
+      const abort = new AbortController()
+      const timer = setTimeout(() => abort.abort(), 8000)
+      let searchData: any
+      try {
+        const searchRes = await fetch(searchUrl.toString(), { signal: abort.signal })
+        clearTimeout(timer)
+        if (!searchRes.ok) return err(`YouTube API error: ${searchRes.status}`, 502)
+        searchData = await searchRes.json()
+      } catch (e) {
+        clearTimeout(timer)
+        return err(`YouTube API unavailable: ${e.message}`, 502)
+      }
       if (searchData.error) return err(searchData.error.message, 502)
 
       const items = searchData.items ?? []
