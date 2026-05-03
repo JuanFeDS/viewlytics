@@ -58,59 +58,66 @@ Deno.serve(async (req) => {
     // ── Channel recent videos ──────────────────────────────────────────
 
     if (segments[0] === 'channel' && segments[2] === 'recent') {
-      const token = await getProviderToken(user.id, serviceClient())
-      if (!token) return err('YouTube not connected', 401)
-
       const channelId = segments[1]
       const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '5'), 10)
 
-      console.log('[channel/recent] channelId:', channelId, 'token prefix:', token.slice(0, 10))
-      const chData = await ytGet('channels', token, {
-        part: 'contentDetails,snippet',
-        id: channelId,
-      })
-      console.log('[channel/recent] chData:', JSON.stringify(chData).slice(0, 300))
-      if (chData.error) return err(`YouTube: ${chData.error.message}`, 400)
-      const channel = chData.items?.[0]
-      if (!channel) return err('Channel not found', 404)
+      const abort = new AbortController()
+      const timer = setTimeout(() => abort.abort(), 8000)
+      let xml: string
+      try {
+        const feedRes = await fetch(
+          `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
+          { signal: abort.signal, headers: { 'User-Agent': 'Mozilla/5.0' } }
+        )
+        clearTimeout(timer)
+        if (!feedRes.ok) return err(`Feed error: ${feedRes.status}`, 400)
+        xml = await feedRes.text()
+        if (!xml.includes('<feed')) return err('Feed returned invalid response', 502)
+      } catch (e) {
+        clearTimeout(timer)
+        return err(`Feed unavailable: ${e.message}`, 502)
+      }
 
-      const uploadsId = channel.contentDetails.relatedPlaylists.uploads
-      const plData = await ytGet('playlistItems', token, {
-        part: 'snippet,contentDetails',
-        playlistId: uploadsId,
-        maxResults: String(limit),
-      })
-      console.log('[channel/recent] plData:', JSON.stringify(plData).slice(0, 300))
-      if (plData.error) return err(`YouTube playlist: ${plData.error.message}`, 400)
+      const beforeEntries = xml.split('<entry>')[0]
+      const channelTitle = beforeEntries.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/)?.[1]
+        ?? beforeEntries.match(/<title>(.*?)<\/title>/)?.[1]
+        ?? ''
 
-      const plItems = (plData.items ?? []).filter((i: any) => i.contentDetails?.videoId)
+      const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)]
+        .slice(0, limit)
+        .map(([, e]) => ({
+          videoId: e.match(/<yt:videoId>(.*?)<\/yt:videoId>/)?.[1] ?? '',
+          title: e.match(/<media:title><!\[CDATA\[([\s\S]*?)\]\]><\/media:title>/)?.[1]
+            ?? e.match(/<media:title>(.*?)<\/media:title>/)?.[1] ?? '',
+          thumbnail: e.match(/<media:thumbnail url="([^"]+)"/)?.[1] ?? '',
+          publishedAt: e.match(/<published>(.*?)<\/published>/)?.[1] ?? '',
+        }))
+        .filter(v => v.videoId)
+
+      if (entries.length === 0) return json({ channel: { id: channelId, title: channelTitle }, videos: [] })
+
+      const token = await getProviderToken(user.id, serviceClient())
       let vidMap: Record<string, any> = {}
-
-      if (plItems.length > 0) {
-        const videoIds = plItems.map((i: any) => i.contentDetails.videoId).join(',')
+      if (token) {
+        const videoIds = entries.map(e => e.videoId).join(',')
         const vidData = await ytGet('videos', token, { part: 'contentDetails,statistics', id: videoIds })
         ;(vidData.items ?? []).forEach((v: any) => { vidMap[v.id] = v })
       }
 
-      const videos = plItems.map((item: any) => {
-        const vid = vidMap[item.contentDetails.videoId] ?? {}
+      const videos = entries.map(e => {
+        const vid = vidMap[e.videoId] ?? {}
         return {
-          videoId: item.contentDetails.videoId,
-          title: item.snippet?.title,
-          thumbnail: item.snippet?.thumbnails?.medium?.url,
-          publishedAt: item.contentDetails.videoPublishedAt,
+          videoId: e.videoId,
+          title: e.title,
+          thumbnail: e.thumbnail,
+          publishedAt: e.publishedAt,
           duration: vid.contentDetails?.duration,
           viewCount: vid.statistics?.viewCount,
         }
       })
 
       return json({
-        channel: {
-          id: channel.id,
-          title: channel.snippet.title,
-          thumbnail: channel.snippet.thumbnails?.default?.url,
-          description: channel.snippet.description,
-        },
+        channel: { id: channelId, title: channelTitle, thumbnail: '', description: '' },
         videos,
       })
     }
