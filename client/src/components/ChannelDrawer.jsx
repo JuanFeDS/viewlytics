@@ -40,7 +40,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
 
   // Fetch channel data
   useEffect(() => {
-    if (!open || !channel) return
+    if (!open || !channel?.channelId) return
     setData(null)
     setLoading(true)
     setAdded({})
