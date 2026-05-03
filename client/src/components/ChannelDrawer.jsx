@@ -45,13 +45,34 @@ export default function ChannelDrawer({ channel, open, onClose }) {
     setData(null)
     setLoading(true)
     setAdded({})
-    api.get(`/subscriptions/channel/${channel.channelId}/recent`, { signal: controller.signal })
-      .then(r => setData(r.data))
+
+    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
+    const url = new URL('https://www.googleapis.com/youtube/v3/search')
+    url.searchParams.set('key', apiKey)
+    url.searchParams.set('channelId', channel.channelId)
+    url.searchParams.set('part', 'snippet')
+    url.searchParams.set('order', 'date')
+    url.searchParams.set('type', 'video')
+    url.searchParams.set('maxResults', '5')
+
+    fetch(url.toString(), { signal: controller.signal })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) throw new Error(data.error.message)
+        const videos = (data.items ?? []).map(item => ({
+          videoId: item.id?.videoId ?? '',
+          title: item.snippet?.title ?? '',
+          thumbnail: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? '',
+          publishedAt: item.snippet?.publishedAt ?? '',
+        })).filter(v => v.videoId)
+        setData({ channel: { id: channel.channelId, title: channel.title }, videos })
+      })
       .catch(e => {
-        if (e.code === 'ERR_CANCELED') return
-        setData({ videos: [], error: e.response?.data?.error ?? e.message })
+        if (e.name === 'AbortError') return
+        setData({ videos: [], error: e.message })
       })
       .finally(() => setLoading(false))
+
     return () => controller.abort()
   }, [open, channel?.channelId])
 
