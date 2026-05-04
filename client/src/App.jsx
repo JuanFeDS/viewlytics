@@ -5,8 +5,10 @@ import { Separator } from '@/components/ui/separator'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { ThemeProvider } from '@/hooks/useTheme'
 import AppSidebar from '@/components/layout/AppSidebar'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import Login from '@/pages/Login'
 import { LogOut } from 'lucide-react'
+import { Toaster } from 'sonner'
 import Subscriptions from '@/pages/Subscriptions'
 import Playlists from '@/pages/Playlists'
 import Pending from '@/pages/Pending'
@@ -71,12 +73,12 @@ function AppLayout() {
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Navigate to="/subscriptions" replace />} />
-              <Route path="/subscriptions" element={<Subscriptions />} />
-              <Route path="/playlists" element={<Playlists />} />
-              <Route path="/pending" element={<Pending />} />
-              <Route path="/search" element={<Search />} />
-              <Route path="/favorites" element={<Favorites />} />
-              <Route path="/stats" element={<Suspense fallback={null}><Stats /></Suspense>} />
+              <Route path="/subscriptions" element={<ErrorBoundary><Subscriptions /></ErrorBoundary>} />
+              <Route path="/playlists" element={<ErrorBoundary><Playlists /></ErrorBoundary>} />
+              <Route path="/pending" element={<ErrorBoundary><Pending /></ErrorBoundary>} />
+              <Route path="/search" element={<ErrorBoundary><Search /></ErrorBoundary>} />
+              <Route path="/favorites" element={<ErrorBoundary><Favorites /></ErrorBoundary>} />
+              <Route path="/stats" element={<ErrorBoundary><Suspense fallback={null}><Stats /></Suspense></ErrorBoundary>} />
             </Routes>
           </main>
         </div>
@@ -91,6 +93,7 @@ export default function App() {
       <BrowserRouter basename="/viewlytics">
         <AuthProvider>
           <AppLayout />
+          <Toaster richColors position="bottom-right" />
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
