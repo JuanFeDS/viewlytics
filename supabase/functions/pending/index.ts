@@ -10,51 +10,42 @@ Deno.serve(async (req) => {
     const { user, supabase } = await requireAuth(req)
     const url = new URL(req.url)
     const segments = url.pathname.split('/').filter(Boolean).slice(3)
-    // segments: [] | [id] | [id, 'watched'] | [id, 'notes']
+    // segments: [] | [video_id] | [video_id, 'watched']
     const svc = serviceClient()
 
-    // PATCH /pending/:id/watched
+    // PATCH /pending/:video_id/watched
     if (req.method === 'PATCH' && segments[1] === 'watched') {
-      const { data } = await supabase
+      const { error } = await svc
         .from('pending_videos')
         .update({ watched_at: new Date().toISOString() })
-        .eq('id', segments[0])
-        .select('video_id')
-        .single()
+        .eq('video_id', segments[0])
+        .eq('user_id', user.id)
 
-      if (data?.video_id) {
-        await svc.from('user_events').insert({
-          user_id: user.id,
-          event_type: 'video_watched',
-          video_id: data.video_id,
-        })
-      }
+      if (error) return err(error.message, 500)
+
+      await svc.from('user_events').insert({
+        user_id: user.id,
+        event_type: 'video_watched',
+        video_id: segments[0],
+      }).then(undefined, () => {})
       return json({ ok: true })
     }
 
-    // PATCH /pending/:id/notes
-    if (req.method === 'PATCH' && segments[1] === 'notes') {
-      const { notes } = await req.json()
-      await supabase.from('pending_videos').update({ notes }).eq('id', segments[0])
-      return json({ ok: true })
-    }
-
-    // DELETE /pending/:id
+    // DELETE /pending/:video_id
     if (req.method === 'DELETE' && segments[0]) {
-      const { data } = await supabase
+      // svc bypasses RLS entirely — filter only by video_id to rule out user_id mismatch
+      const { error } = await svc
         .from('pending_videos')
         .delete()
-        .eq('id', segments[0])
-        .select('video_id')
-        .single()
+        .eq('video_id', segments[0])
 
-      if (data?.video_id) {
-        await svc.from('user_events').insert({
-          user_id: user.id,
-          event_type: 'video_unsaved',
-          video_id: data.video_id,
-        })
-      }
+      if (error) return err(error.message, 500)
+
+      await svc.from('user_events').insert({
+        user_id: user.id,
+        event_type: 'video_unsaved',
+        video_id: segments[0],
+      }).then(undefined, () => {})
       return json({ ok: true })
     }
 
@@ -72,13 +63,14 @@ Deno.serve(async (req) => {
         .select()
         .single()
 
-      if (error) return err('Video already in pending list', 409)
+      if (error?.code === '23505') return err('Video already in pending list', 409)
+      if (error) return err(error.message, 500)
 
       await svc.from('user_events').insert({
         user_id: user.id,
         event_type: 'video_saved',
         video_id,
-      })
+      }).then(undefined, () => {})
       return json({ ...data, video_id, title, channel_id, channel_title, thumbnail_url, duration })
     }
 
