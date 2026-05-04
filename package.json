@@ -1,10 +1,10 @@
 {
-  "name": "youtube-analyzer",
+  "name": "viewlytics",
   "version": "1.0.0",
   "scripts": {
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "install:all": "cd server && npm install && cd ../client && npm install"
+    "dev": "cd client && npm run dev",
+    "deploy": "cd client && npm run deploy",
+    "deploy:functions": "npx supabase functions deploy"
   },
   "devDependencies": {
     "supabase": "^2.98.0"
