@@ -12,14 +12,21 @@ Deno.serve(async (req) => {
     const segments = url.pathname.split('/').filter(Boolean).slice(3)
     const svc = serviceClient()
 
-    // DELETE /favorites/:videoId
+    // DELETE /favorites/:video_id
     if (req.method === 'DELETE' && segments[0]) {
-      await supabase.from('favorite_videos').delete().eq('video_id', segments[0])
+      const { error } = await svc
+        .from('favorite_videos')
+        .delete()
+        .eq('video_id', segments[0])
+        .eq('user_id', user.id)
+
+      if (error) return err(error.message, 500)
+
       await svc.from('user_events').insert({
         user_id: user.id,
         event_type: 'video_unfavorited',
         video_id: segments[0],
-      })
+      }).then(undefined, () => {})
       return json({ ok: true })
     }
 
@@ -37,13 +44,14 @@ Deno.serve(async (req) => {
         .select()
         .single()
 
-      if (error) return err('Already in favorites', 409)
+      if (error?.code === '23505') return err('Already in favorites', 409)
+      if (error) return err(error.message, 500)
 
       await svc.from('user_events').insert({
         user_id: user.id,
         event_type: 'video_favorited',
         video_id,
-      })
+      }).then(undefined, () => {})
       return json(data)
     }
 

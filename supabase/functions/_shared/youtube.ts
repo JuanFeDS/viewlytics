@@ -110,6 +110,6 @@ export async function upsertChannelAndVideo(
       thumbnail_url: video.thumbnail_url,
       duration: video.duration,
     },
-    { onConflict: 'video_id', ignoreDuplicates: true }
+    { onConflict: 'video_id' }
   )
 }
