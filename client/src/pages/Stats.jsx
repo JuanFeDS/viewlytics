@@ -120,10 +120,10 @@ function TabResumen({ stats, ytStats, ytApiStats, loading, theme }) {
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis' },
     grid: { left: 16, right: 16, top: 10, bottom: 0, containLabel: true },
-    xAxis: { type: 'category', data: stats?.weeklyAdded.map(w => w.week) ?? [], axisLabel: { color: tc, fontSize: 11 }, axisTick: { show: false }, axisLine: { lineStyle: { color: gc } } },
+    xAxis: { type: 'category', data: stats?.weeklyAdded?.map(w => w.week) ?? [], axisLabel: { color: tc, fontSize: 11 }, axisTick: { show: false }, axisLine: { lineStyle: { color: gc } } },
     yAxis: { type: 'value', splitLine: { lineStyle: { color: gc } }, axisLabel: { color: tc }, minInterval: 1 },
     series: [{
-      type: 'line', data: stats?.weeklyAdded.map(w => w.count) ?? [],
+      type: 'line', data: stats?.weeklyAdded?.map(w => w.count) ?? [],
       smooth: true, symbol: 'circle', symbolSize: 7,
       lineStyle: { color: '#6366f1', width: 2.5 },
       itemStyle: { color: '#6366f1' },

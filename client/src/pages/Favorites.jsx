@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Star, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import api from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ export default function Favorites() {
   const remove = async (videoId) => {
     await api.delete(`/favorites/${videoId}`)
     setVideos(prev => prev.filter(v => v.video_id !== videoId))
+    toast.success('Eliminado de favoritos')
   }
 
   return (
