@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Star, Clock, X } from 'lucide-react'
+import { toast } from 'sonner'
 import api from '@/lib/api'
 import { parseDuration, formatViews, timeAgo } from '@/lib/youtube'
 import { Button } from '@/components/ui/button'
@@ -85,25 +86,37 @@ export default function ChannelDrawer({ channel, open, onClose }) {
   }, [open, onClose])
 
   const addToPending = async (video) => {
-    await api.post('/pending', {
-      video_id: video.videoId,
-      title: video.title,
-      channel_id: channel.channelId,
-      channel_title: channel.title,
-      thumbnail_url: video.thumbnail,
-    }).catch(() => {})
-    setAdded(prev => ({ ...prev, [video.videoId]: 'pending' }))
+    try {
+      await api.post('/pending', {
+        video_id: video.videoId,
+        title: video.title,
+        channel_id: channel.channelId,
+        channel_title: channel.title,
+        thumbnail_url: video.thumbnail,
+      })
+      setAdded(prev => ({ ...prev, [video.videoId]: 'pending' }))
+      toast.success('Agregado a pendientes')
+    } catch (e) {
+      const msg = e.response?.data?.error ?? e.message
+      toast.error('No se pudo agregar a pendientes', { description: msg })
+    }
   }
 
   const addToFavorites = async (video) => {
-    await api.post('/favorites', {
-      video_id: video.videoId,
-      title: video.title,
-      channel_id: channel.channelId,
-      channel_title: channel.title,
-      thumbnail_url: video.thumbnail,
-    }).catch(() => {})
-    setAdded(prev => ({ ...prev, [video.videoId]: 'favorite' }))
+    try {
+      await api.post('/favorites', {
+        video_id: video.videoId,
+        title: video.title,
+        channel_id: channel.channelId,
+        channel_title: channel.title,
+        thumbnail_url: video.thumbnail,
+      })
+      setAdded(prev => ({ ...prev, [video.videoId]: 'favorite' }))
+      toast.success('Guardado en favoritos')
+    } catch (e) {
+      const msg = e.response?.data?.error ?? e.message
+      toast.error('No se pudo guardar en favoritos', { description: msg })
+    }
   }
 
   if (!mounted && !open) return null
