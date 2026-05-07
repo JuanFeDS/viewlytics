@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 
 function VideoSkeleton() {
   return (
@@ -236,7 +235,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="px-5 space-y-4 pb-6">
             {(() => {
               const visibleVideos = data?.videos
@@ -318,7 +317,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
             )
             })()}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     </>,
     document.body
