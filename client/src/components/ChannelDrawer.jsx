@@ -239,7 +239,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
           </div>
         </div>
 
-        <div className="overflow-y-auto min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
+        <div className="overflow-y-auto min-h-0">
           <div className="px-5 space-y-4 pb-6">
             {(() => {
               const visibleVideos = data?.videos
