@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { ExternalLink, Star, Clock, X } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
-import { parseDuration, formatViews, timeAgo } from '@/lib/youtube'
+import { parseDuration, formatViews, timeAgo, isoToSeconds } from '@/lib/youtube'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,26 +48,54 @@ export default function ChannelDrawer({ channel, open, onClose }) {
     setAdded({})
 
     const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
-    const url = new URL('https://www.googleapis.com/youtube/v3/search')
-    url.searchParams.set('key', apiKey)
-    url.searchParams.set('channelId', channel.channelId)
-    url.searchParams.set('part', 'snippet')
-    url.searchParams.set('order', 'date')
-    url.searchParams.set('type', 'video')
-    url.searchParams.set('maxResults', '5')
 
-    fetch(url.toString(), { signal: controller.signal })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error.message)
-        const videos = (data.items ?? []).map(item => ({
+    async function fetchVideos() {
+      // Step 1: fetch 15 recent videos (buffer for shorts filtering)
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
+      searchUrl.searchParams.set('key', apiKey)
+      searchUrl.searchParams.set('channelId', channel.channelId)
+      searchUrl.searchParams.set('part', 'snippet')
+      searchUrl.searchParams.set('order', 'date')
+      searchUrl.searchParams.set('type', 'video')
+      searchUrl.searchParams.set('maxResults', '15')
+
+      const searchRes = await fetch(searchUrl.toString(), { signal: controller.signal })
+      const searchData = await searchRes.json()
+      if (searchData.error) throw new Error(searchData.error.message)
+
+      const candidates = (searchData.items ?? [])
+        .map(item => ({
           videoId: item.id?.videoId ?? '',
           title: item.snippet?.title ?? '',
           thumbnail: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? '',
           publishedAt: item.snippet?.publishedAt ?? '',
-        })).filter(v => v.videoId)
-        setData({ channel: { id: channel.channelId, title: channel.title }, videos })
-      })
+        }))
+        .filter(v => v.videoId)
+
+      // Step 2: fetch durations via videos.list (1 quota unit)
+      const ids = candidates.map(v => v.videoId).join(',')
+      const detailsUrl = new URL('https://www.googleapis.com/youtube/v3/videos')
+      detailsUrl.searchParams.set('key', apiKey)
+      detailsUrl.searchParams.set('id', ids)
+      detailsUrl.searchParams.set('part', 'contentDetails')
+
+      const detailsRes = await fetch(detailsUrl.toString(), { signal: controller.signal })
+      const detailsData = await detailsRes.json()
+
+      const durationMap = Object.fromEntries(
+        (detailsData.items ?? []).map(item => [item.id, item.contentDetails?.duration ?? ''])
+      )
+
+      // Step 3: attach duration, filter shorts (≤60s), take first 5
+      const videos = candidates
+        .map(v => ({ ...v, duration: durationMap[v.videoId] ?? '' }))
+        .filter(v => isoToSeconds(v.duration) > 60)
+        .slice(0, 5)
+
+      setData({ channel: { id: channel.channelId, title: channel.title }, videos })
+    }
+
+    fetchVideos()
       .catch(e => {
         if (e.name === 'AbortError') return
         setData({ videos: [], error: e.message })
