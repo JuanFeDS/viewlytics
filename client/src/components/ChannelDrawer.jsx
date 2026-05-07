@@ -28,6 +28,8 @@ export default function ChannelDrawer({ channel, open, onClose }) {
   const [loading, setLoading] = useState(false)
   const [added, setAdded] = useState({})
   const [mounted, setMounted] = useState(false)
+  const [filterShorts, setFilterShorts] = useState(true)
+  const [videoCount, setVideoCount] = useState(5)
 
   // Animate in/out
   useEffect(() => {
@@ -46,6 +48,8 @@ export default function ChannelDrawer({ channel, open, onClose }) {
     setData(null)
     setLoading(true)
     setAdded({})
+    setFilterShorts(true)
+    setVideoCount(5)
 
     const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
 
@@ -57,7 +61,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
       searchUrl.searchParams.set('part', 'snippet')
       searchUrl.searchParams.set('order', 'date')
       searchUrl.searchParams.set('type', 'video')
-      searchUrl.searchParams.set('maxResults', '15')
+      searchUrl.searchParams.set('maxResults', '50')
 
       const searchRes = await fetch(searchUrl.toString(), { signal: controller.signal })
       const searchData = await searchRes.json()
@@ -86,11 +90,9 @@ export default function ChannelDrawer({ channel, open, onClose }) {
         (detailsData.items ?? []).map(item => [item.id, item.contentDetails?.duration ?? ''])
       )
 
-      // Step 3: attach duration, filter shorts (≤60s), take first 5
+      // Step 3: attach durations — filtering happens at render time
       const videos = candidates
         .map(v => ({ ...v, duration: durationMap[v.videoId] ?? '' }))
-        .filter(v => isoToSeconds(v.duration) > 60)
-        .slice(0, 5)
 
       setData({ channel: { id: channel.channelId, title: channel.title }, videos })
     }
@@ -166,11 +168,18 @@ export default function ChannelDrawer({ channel, open, onClose }) {
         {/* Header */}
         <div className="flex items-center gap-3 p-5 shrink-0">
           {(data?.channel?.thumbnail || channel?.thumbnail) && (
-            <img
-              src={data?.channel?.thumbnail || channel?.thumbnail}
-              alt=""
-              className="size-12 rounded-full object-cover shrink-0"
-            />
+            <a
+              href={`https://www.youtube.com/channel/${channel?.channelId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0"
+            >
+              <img
+                src={data?.channel?.thumbnail || channel?.thumbnail}
+                alt=""
+                className="size-12 rounded-full object-cover hover:opacity-80 transition-opacity"
+              />
+            </a>
           )}
           <div className="flex-1 min-w-0">
             <p className="text-base font-semibold leading-tight truncate">{channel?.title}</p>
@@ -201,22 +210,48 @@ export default function ChannelDrawer({ channel, open, onClose }) {
 
         <Separator />
 
-        <div className="px-5 py-3 shrink-0">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Últimos 5 videos
+        <div className="px-5 py-3 shrink-0 flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">
+            Últimos {videoCount} videos
           </p>
+          <div className="flex items-center gap-1.5">
+            {[5, 10, 15].map(n => (
+              <Badge
+                key={n}
+                variant={videoCount === n ? 'secondary' : 'outline'}
+                className="cursor-pointer select-none text-xs px-2"
+                onClick={() => setVideoCount(n)}
+              >
+                {n}
+              </Badge>
+            ))}
+            <div className="w-px h-3 bg-border mx-0.5" />
+            <Badge
+              variant={filterShorts ? 'secondary' : 'outline'}
+              className="cursor-pointer select-none text-xs"
+              onClick={() => setFilterShorts(f => !f)}
+            >
+              Sin Shorts
+            </Badge>
+          </div>
         </div>
 
         <ScrollArea className="flex-1">
           <div className="px-5 space-y-4 pb-6">
-            {loading ? (
+            {(() => {
+              const visibleVideos = data?.videos
+                ? (filterShorts
+                    ? data.videos.filter(v => isoToSeconds(v.duration) > 120).slice(0, videoCount)
+                    : data.videos.slice(0, videoCount))
+                : []
+              return loading ? (
               Array.from({ length: 5 }).map((_, i) => <VideoSkeleton key={i} />)
             ) : data?.error ? (
               <p className="text-sm text-destructive text-center py-8">{data.error}</p>
-            ) : !data?.videos?.length ? (
+            ) : !visibleVideos.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">Sin videos recientes</p>
             ) : (
-              data.videos.map(video => {
+              visibleVideos.map(video => {
                 const state = added[video.videoId]
                 return (
                   <div key={video.videoId} className="flex gap-3">
@@ -280,7 +315,8 @@ export default function ChannelDrawer({ channel, open, onClose }) {
                   </div>
                 )
               })
-            )}
+            )
+            })()}
           </div>
         </ScrollArea>
       </div>
