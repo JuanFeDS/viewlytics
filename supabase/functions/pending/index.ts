@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   try {
     const { user, supabase } = await requireAuth(req)
     const url = new URL(req.url)
-    const segments = url.pathname.split('/').filter(Boolean).slice(3)
+    const segments = url.pathname.split('/').filter(Boolean).slice(1)
     // segments: [] | [video_id] | [video_id, 'watched']
     const svc = serviceClient()
 
@@ -19,7 +19,6 @@ Deno.serve(async (req) => {
         .from('pending_videos')
         .update({ watched_at: new Date().toISOString() })
         .eq('video_id', segments[0])
-        .eq('user_id', user.id)
 
       if (error) return err(error.message, 500)
 
