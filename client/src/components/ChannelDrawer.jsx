@@ -161,7 +161,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
 
       {/* Drawer panel */}
       <div
-        className="fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[480px] bg-background border-l shadow-2xl transition-transform duration-300 ease-in-out"
+        className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden w-full max-w-[480px] bg-background border-l shadow-2xl transition-transform duration-300 ease-in-out"
         style={{ transform: open ? 'translateX(0)' : 'translateX(100%)' }}
       >
         {/* Header */}
