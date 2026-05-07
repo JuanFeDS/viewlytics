@@ -1,96 +1,163 @@
 import { useEffect, useState } from 'react'
-import { Star, Trash2 } from 'lucide-react'
+import { Star, Trash2, Eye, ArrowUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { EmptyState } from '@/components/ui/empty-state'
 
-function FavoriteSkeleton() {
+function VideoSkeleton() {
   return (
-    <Card className="overflow-hidden">
-      <Skeleton className="w-full aspect-video" />
-      <CardContent className="p-3 space-y-2">
-        <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-2/3" />
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-2">
+      <Skeleton className="w-full aspect-video rounded-xl" />
+      <Skeleton className="h-3.5 w-full" />
+      <Skeleton className="h-3 w-2/3" />
+    </div>
   )
+}
+
+function VideoCard({ v, onRemove }) {
+  const ytUrl = `https://www.youtube.com/watch?v=${v.video_id}`
+
+  return (
+    <div className="group relative flex flex-col gap-2">
+      <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <button
+          onClick={() => onRemove(v.video_id)}
+          className="flex items-center justify-center size-8 rounded-lg bg-black/60 hover:bg-red-600 text-white transition-colors"
+          title="Eliminar de favoritos"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+
+      <a href={ytUrl} target="_blank" rel="noopener noreferrer"
+        className="relative block w-full aspect-video rounded-xl overflow-hidden bg-muted"
+      >
+        {v.thumbnail_url
+          ? <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
+          : <div className="w-full h-full flex items-center justify-center"><Eye className="size-8 text-muted-foreground/40" /></div>
+        }
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+      </a>
+
+      <div className="flex flex-col gap-0.5 px-0.5">
+        <a href={ytUrl} target="_blank" rel="noopener noreferrer"
+          className="text-sm font-medium line-clamp-2 leading-snug hover:underline"
+        >
+          {v.title || <span className="text-muted-foreground italic">Sin título</span>}
+        </a>
+        <p className="text-xs text-muted-foreground truncate">{v.channel_title || '—'}</p>
+        <p className="text-xs text-muted-foreground">
+          {new Date(v.saved_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Más recientes' },
+  { value: 'oldest', label: 'Más antiguos' },
+  { value: 'channel', label: 'Por canal' },
+]
+
+function sortVideos(videos, sort) {
+  return [...videos].sort((a, b) => {
+    if (sort === 'oldest') return new Date(a.saved_at) - new Date(b.saved_at)
+    if (sort === 'channel') return (a.channel_title ?? '').localeCompare(b.channel_title ?? '')
+    return new Date(b.saved_at) - new Date(a.saved_at)
+  })
 }
 
 export default function Favorites() {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sort, setSort] = useState('newest')
 
   useEffect(() => {
     api.get('/favorites')
-      .then(r => setVideos(r.data))
+      .then(async r => {
+        const videos = r.data ?? []
+        const missing = videos.filter(v => !v.title || !v.thumbnail_url)
+
+        if (missing.length > 0) {
+          const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
+          const ids = missing.map(v => v.video_id).filter(Boolean).join(',')
+          const url = new URL('https://www.googleapis.com/youtube/v3/videos')
+          url.searchParams.set('key', apiKey)
+          url.searchParams.set('id', ids)
+          url.searchParams.set('part', 'snippet')
+
+          const ytData = await fetch(url.toString()).then(r => r.json()).catch(() => ({ items: [] }))
+          const byId = Object.fromEntries(
+            (ytData.items ?? []).map(item => [item.id, {
+              title: item.snippet?.title,
+              thumbnail_url: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url,
+              channel_title: item.snippet?.channelTitle,
+            }])
+          )
+
+          setVideos(videos.map(v => ({
+            ...v,
+            title: v.title || byId[v.video_id]?.title || '(sin título)',
+            thumbnail_url: v.thumbnail_url || byId[v.video_id]?.thumbnail_url || null,
+            channel_title: v.channel_title || byId[v.video_id]?.channel_title || '—',
+          })))
+        } else {
+          setVideos(videos)
+        }
+      })
       .catch(e => setError(e.response?.data?.error ?? e.message))
       .finally(() => setLoading(false))
   }, [])
 
   const remove = async (videoId) => {
-    await api.delete(`/favorites/${videoId}`)
-    setVideos(prev => prev.filter(v => v.video_id !== videoId))
-    toast.success('Eliminado de favoritos')
+    try {
+      await api.delete(`/favorites/${videoId}`)
+      setVideos(prev => prev.filter(v => v.video_id !== videoId))
+      toast.success('Eliminado de favoritos')
+    } catch (e) {
+      toast.error('No se pudo eliminar: ' + (e.response?.data?.error ?? e.message))
+    }
   }
+
+  const sorted = sortVideos(videos, sort)
 
   return (
     <div className="p-6 space-y-5">
-      <Badge variant="outline" className="gap-1">
-        <Star className="size-3" />{loading ? '...' : videos.length} videos guardados
-      </Badge>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <Badge variant="outline" className="gap-1.5">
+          <Star className="size-3" />{loading ? '...' : videos.length} guardados
+        </Badge>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ArrowUpDown className="size-3" />
+          <select
+            value={sort}
+            onChange={e => setSort(e.target.value)}
+            className="bg-transparent border-none text-xs text-muted-foreground focus:outline-none cursor-pointer"
+          >
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
 
       {error && (
         <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{error}</p>
       )}
 
-      <ScrollArea className="h-[calc(100vh-160px)]">
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pr-2">
-            {Array.from({ length: 8 }).map((_, i) => <FavoriteSkeleton key={i} />)}
-          </div>
-        ) : videos.length === 0 ? (
-          <EmptyState
-            icon={Star}
-            title="Sin favoritos"
-            description="Guarda videos desde la búsqueda para verlos aquí"
-          />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pr-2">
-            {videos.map(v => (
-              <Card key={v.id} className="overflow-hidden hover:shadow-md transition-shadow group">
-                <a href={`https://www.youtube.com/watch?v=${v.video_id}`} target="_blank" rel="noopener noreferrer">
-                  {v.thumbnail_url && (
-                    <img src={v.thumbnail_url} alt={v.title} className="w-full aspect-video object-cover" />
-                  )}
-                </a>
-                <CardContent className="p-3">
-                  <p className="font-medium text-sm line-clamp-2">{v.title}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{v.channel_title}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(v.saved_at).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => remove(v.video_id)}
-                    >
-                      <Trash2 className="size-3.5 text-destructive" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <VideoSkeleton key={i} />)}
+        </div>
+      ) : sorted.length === 0 ? (
+        <EmptyState icon={Star} title="Sin favoritos" description="Guarda videos desde la búsqueda para verlos aquí" />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {sorted.map(v => <VideoCard key={v.id} v={v} onRemove={remove} />)}
+        </div>
+      )}
     </div>
   )
 }

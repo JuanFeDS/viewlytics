@@ -9,7 +9,8 @@ Deno.serve(async (req) => {
   try {
     const { user, supabase } = await requireAuth(req)
     const url = new URL(req.url)
-    const segments = url.pathname.split('/').filter(Boolean).slice(3)
+    const segments = url.pathname.split('/').filter(Boolean).slice(1)
+    // segments: [] | [video_id]
     const svc = serviceClient()
 
     // DELETE /favorites/:video_id
