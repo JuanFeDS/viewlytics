@@ -161,11 +161,15 @@ export default function ChannelDrawer({ channel, open, onClose }) {
 
       {/* Drawer panel */}
       <div
-        className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden w-full max-w-[480px] bg-background border-l shadow-2xl transition-transform duration-300 ease-in-out"
-        style={{ transform: open ? 'translateX(0)' : 'translateX(100%)' }}
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-[480px] bg-background border-l shadow-2xl transition-transform duration-300 ease-in-out"
+        style={{
+          transform: open ? 'translateX(0)' : 'translateX(100%)',
+          display: 'grid',
+          gridTemplateRows: 'auto auto auto 1fr',
+        }}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 p-5 shrink-0">
+        <div className="flex items-center gap-3 p-5">
           {(data?.channel?.thumbnail || channel?.thumbnail) && (
             <a
               href={`https://www.youtube.com/channel/${channel?.channelId}`}
@@ -209,7 +213,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
 
         <Separator />
 
-        <div className="px-5 py-3 shrink-0 flex items-center justify-between gap-2">
+        <div className="px-5 py-3 flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">
             Últimos {videoCount} videos
           </p>
@@ -235,7 +239,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="overflow-y-auto min-h-0">
           <div className="px-5 space-y-4 pb-6">
             {(() => {
               const visibleVideos = data?.videos
