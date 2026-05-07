@@ -239,12 +239,12 @@ export default function ChannelDrawer({ channel, open, onClose }) {
           </div>
         </div>
 
-        <div className="overflow-y-auto min-h-0">
+        <div className="overflow-y-auto min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full" style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
           <div className="px-5 space-y-4 pb-6">
             {(() => {
               const visibleVideos = data?.videos
                 ? (filterShorts
-                    ? data.videos.filter(v => isoToSeconds(v.duration) > 120).slice(0, videoCount)
+                    ? data.videos.filter(v => isoToSeconds(v.duration) > 180).slice(0, videoCount)
                     : data.videos.slice(0, videoCount))
                 : []
               return loading ? (
