@@ -6,6 +6,7 @@ on:
     paths:
       - 'client/**'
       - '!client/node_modules/**'
+  workflow_dispatch:
 
 permissions:
   contents: write
