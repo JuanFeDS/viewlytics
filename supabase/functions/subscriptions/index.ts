@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
   if (cors) return cors
 
   const url = new URL(req.url)
-  const segments = url.pathname.split('/').filter(Boolean).slice(3)
+  const segments = url.pathname.split('/').filter(Boolean).slice(1)
 
   try {
     const { user, supabase } = await requireAuth(req)
@@ -51,13 +51,14 @@ Deno.serve(async (req) => {
 
     // ── Main subscriptions list ────────────────────────────────────────
 
-    const token = await getProviderToken(user.id, serviceClient())
+    const sc = serviceClient()
+    const token = await getProviderToken(user.id, sc)
     if (!token) return err('YouTube not connected', 401)
 
     const [subscriptions, categoriesRes, mappingsRes] = await Promise.all([
       ytGetAll('subscriptions', token, { part: 'snippet', mine: 'true', maxResults: '50' }),
-      supabase.from('subscription_categories').select('*').eq('user_id', user.id),
-      supabase.from('subscription_category_map').select('*').eq('user_id', user.id),
+      sc.from('subscription_categories').select('*').eq('user_id', user.id),
+      sc.from('subscription_category_map').select('*').eq('user_id', user.id),
     ])
 
     return json({
