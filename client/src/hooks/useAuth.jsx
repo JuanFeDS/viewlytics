@@ -23,6 +23,12 @@ export function AuthProvider({ children }) {
       }
     })
 
+    // Fallback: onAuthStateChange reads from storage (no network), getSession makes HTTP call.
+    // Only updates if onAuthStateChange hasn't resolved yet (prev === undefined).
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => setUser(prev => prev === undefined ? (session?.user ?? null) : prev))
+      .catch(() => setUser(prev => prev === undefined ? null : prev))
+
     return () => subscription.unsubscribe()
   }, [])
 
