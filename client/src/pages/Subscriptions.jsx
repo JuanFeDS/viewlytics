@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Plus, Tag, X, Users } from 'lucide-react'
+import { Plus, Tag, X, Users, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
+import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { EmptyState } from '@/components/ui/empty-state'
 import ChannelDrawer from '@/components/ChannelDrawer'
 
@@ -47,27 +47,53 @@ export default function Subscriptions() {
       .finally(() => setLoading(false))
   }, [])
 
+  const [savingCat, setSavingCat] = useState(false)
+  const [assigningId, setAssigningId] = useState(null) // `${subId}-${catId}`
+
   const createCategory = async () => {
-    if (!newCatName.trim()) return
-    const { data } = await api.post('/subscriptions/categories', { name: newCatName })
-    setCategories(prev => [...prev, data])
-    setNewCatName('')
+    if (!newCatName.trim() || savingCat) return
+    setSavingCat(true)
+    try {
+      const { data } = await api.post('/subscriptions/categories', { name: newCatName.trim() })
+      setCategories(prev => [...prev, data])
+      setNewCatName('')
+      toast.success('Categoría creada')
+    } catch (e) {
+      toast.error('No se pudo crear la categoría', { description: e.response?.data?.error ?? e.message })
+    } finally {
+      setSavingCat(false)
+    }
   }
 
   const deleteCategory = async (id) => {
-    await api.delete(`/subscriptions/categories/${id}`)
-    setCategories(prev => prev.filter(c => c.id !== id))
-    setMappings(prev => prev.filter(m => m.category_id !== id))
+    try {
+      await api.delete(`/subscriptions/categories/${id}`)
+      setCategories(prev => prev.filter(c => c.id !== id))
+      setMappings(prev => prev.filter(m => m.category_id !== id))
+      if (filterCat === id) setFilterCat(null)
+      toast.success('Categoría eliminada')
+    } catch (e) {
+      toast.error('No se pudo eliminar', { description: e.response?.data?.error ?? e.message })
+    }
   }
 
   const toggleAssign = async (subscriptionId, categoryId) => {
+    const key = `${subscriptionId}-${categoryId}`
+    if (assigningId === key) return
+    setAssigningId(key)
     const exists = mappings.find(m => m.subscription_id === subscriptionId && m.category_id === categoryId)
-    if (exists) {
-      await api.delete(`/subscriptions/categories/${categoryId}/assign/${subscriptionId}`)
-      setMappings(prev => prev.filter(m => !(m.subscription_id === subscriptionId && m.category_id === categoryId)))
-    } else {
-      await api.post(`/subscriptions/categories/${categoryId}/assign/${subscriptionId}`)
-      setMappings(prev => [...prev, { subscription_id: subscriptionId, category_id: categoryId }])
+    try {
+      if (exists) {
+        await api.delete(`/subscriptions/categories/${categoryId}/assign/${subscriptionId}`)
+        setMappings(prev => prev.filter(m => !(m.subscription_id === subscriptionId && m.category_id === categoryId)))
+      } else {
+        await api.post(`/subscriptions/categories/${categoryId}/assign/${subscriptionId}`)
+        setMappings(prev => [...prev, { subscription_id: subscriptionId, category_id: categoryId }])
+      }
+    } catch (e) {
+      toast.error('No se pudo actualizar la categoría', { description: e.response?.data?.error ?? e.message })
+    } finally {
+      setAssigningId(null)
     }
   }
 
@@ -98,24 +124,25 @@ export default function Subscriptions() {
                 value={newCatName}
                 onChange={e => setNewCatName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && createCategory()}
+                disabled={savingCat}
               />
-              <Button onClick={createCategory}>Crear</Button>
+              <Button onClick={createCategory} disabled={savingCat}>
+                {savingCat ? <Loader2 className="size-4 animate-spin" /> : 'Crear'}
+              </Button>
             </div>
-            <ScrollArea className="max-h-48">
-              <div className="space-y-1 mt-2">
-                {categories.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">Sin categorías aún</p>
-                )}
-                {categories.map(cat => (
-                  <div key={cat.id} className="flex justify-between items-center rounded-md px-2 py-1.5 hover:bg-muted">
-                    <span className="text-sm">{cat.name}</span>
-                    <Button variant="ghost" size="icon" className="size-7" onClick={() => deleteCategory(cat.id)}>
-                      <X className="size-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+            <div className="max-h-48 overflow-y-auto space-y-1 mt-2">
+              {categories.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Sin categorías aún</p>
+              )}
+              {categories.map(cat => (
+                <div key={cat.id} className="flex justify-between items-center rounded-md px-2 py-1.5 hover:bg-muted">
+                  <span className="text-sm">{cat.name}</span>
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" onClick={() => deleteCategory(cat.id)}>
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -205,13 +232,15 @@ export default function Subscriptions() {
                             <div className="flex flex-wrap gap-2">
                               {categories.map(cat => {
                                 const assigned = mappings.some(m => m.subscription_id === sub.id && m.category_id === cat.id)
+                                const busy = assigningId === `${sub.id}-${cat.id}`
                                 return (
                                   <Badge
                                     key={cat.id}
                                     variant={assigned ? 'default' : 'outline'}
-                                    className="cursor-pointer"
+                                    className={`cursor-pointer transition-opacity ${busy ? 'opacity-50 pointer-events-none' : ''}`}
                                     onClick={() => toggleAssign(sub.id, cat.id)}
                                   >
+                                    {busy && <Loader2 className="size-2.5 mr-1 animate-spin" />}
                                     {cat.name}
                                   </Badge>
                                 )
