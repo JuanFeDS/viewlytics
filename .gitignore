@@ -12,3 +12,4 @@ dist-ssr/
 *.local
 .DS_Store
 docs/ignore
+*-session.md
