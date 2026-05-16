@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Star, Trash2, Eye, ArrowUpDown } from 'lucide-react'
+import { Star, Trash2, Eye, ArrowUpDown, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
+import VideoPlayerModal from '@/components/VideoPlayerModal'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -16,7 +17,7 @@ function VideoSkeleton() {
   )
 }
 
-function VideoCard({ v, onRemove }) {
+function VideoCard({ v, onRemove, onPlay }) {
   const ytUrl = `https://www.youtube.com/watch?v=${v.video_id}`
 
   return (
@@ -31,22 +32,35 @@ function VideoCard({ v, onRemove }) {
         </button>
       </div>
 
-      <a href={ytUrl} target="_blank" rel="noopener noreferrer"
-        className="relative block w-full aspect-video rounded-xl overflow-hidden bg-muted"
+      {/* Thumbnail — click opens player */}
+      <div
+        role="button"
+        onClick={() => onPlay(v)}
+        className="relative block w-full aspect-video rounded-xl overflow-hidden bg-muted cursor-pointer"
       >
         {v.thumbnail_url
           ? <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
           : <div className="w-full h-full flex items-center justify-center"><Eye className="size-8 text-muted-foreground/40" /></div>
         }
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
-      </a>
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-full p-3">
+            <Play className="size-6 text-white fill-white" />
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-0.5 px-0.5">
-        <a href={ytUrl} target="_blank" rel="noopener noreferrer"
-          className="text-sm font-medium line-clamp-2 leading-snug hover:underline"
-        >
-          {v.title || <span className="text-muted-foreground italic">Sin título</span>}
-        </a>
+        <div className="flex items-start justify-between gap-1">
+          <button
+            onClick={() => onPlay(v)}
+            className="text-sm font-medium line-clamp-2 leading-snug hover:underline text-left"
+          >
+            {v.title || <span className="text-muted-foreground italic">Sin título</span>}
+          </button>
+          <a href={ytUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 mt-0.5 text-muted-foreground/50 hover:text-muted-foreground" title="Abrir en YouTube">
+            <ExternalLink className="size-3" />
+          </a>
+        </div>
         <p className="text-xs text-muted-foreground truncate">{v.channel_title || '—'}</p>
         <p className="text-xs text-muted-foreground">
           {new Date(v.saved_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -75,6 +89,7 @@ export default function Favorites() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sort, setSort] = useState('newest')
+  const [playerVideo, setPlayerVideo] = useState(null)
 
   useEffect(() => {
     api.get('/favorites')
@@ -126,6 +141,13 @@ export default function Favorites() {
   const sorted = sortVideos(videos, sort)
 
   return (
+    <>
+    <VideoPlayerModal
+      video={playerVideo}
+      onClose={() => setPlayerVideo(null)}
+      queue={sorted}
+      onPlayVideo={setPlayerVideo}
+    />
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Badge variant="outline" className="gap-1.5">
@@ -155,9 +177,10 @@ export default function Favorites() {
         <EmptyState icon={Star} title="Sin favoritos" description="Guarda videos desde la búsqueda para verlos aquí" />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {sorted.map(v => <VideoCard key={v.id} v={v} onRemove={remove} />)}
+          {sorted.map(v => <VideoCard key={v.id} v={v} onRemove={remove} onPlay={setPlayerVideo} />)}
         </div>
       )}
     </div>
+    </>
   )
 }
