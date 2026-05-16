@@ -346,43 +346,43 @@ function TabSuscripciones({ data, loading, progress, message, onRefresh }) {
 
                 return (
                   <div key={cat.id} className="rounded-xl border bg-card hover:shadow-md transition-shadow">
-                    <div className="px-4 py-3 flex items-center gap-4">
-                      {/* Name */}
-                      <div className="flex items-center gap-2 w-36 shrink-0">
-                        <div className="size-2 rounded-full shrink-0" style={{ background: color }} />
-                        <p className="font-semibold text-sm truncate">{cat.name}</p>
+                    <div className="px-4 py-3 space-y-2.5 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
+                      {/* Name + engagement bar — side by side on mobile, separate columns on desktop */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 flex-1 min-w-0 sm:w-36 sm:flex-none sm:shrink-0">
+                          <div className="size-2 rounded-full shrink-0" style={{ background: color }} />
+                          <p className="font-semibold text-sm truncate">{cat.name}</p>
+                        </div>
+                        <div className="w-28 sm:w-32 shrink-0 space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-[10px] text-muted-foreground">Engagement</span>
+                            <span className="text-[10px] font-semibold" style={{ color }}>{engagementPct}%</span>
+                          </div>
+                          <div className="h-1 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${engagementPct}%`, background: color }} />
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Engagement bar */}
-                      <div className="w-32 shrink-0 space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-[10px] text-muted-foreground">Engagement</span>
-                          <span className="text-[10px] font-semibold" style={{ color }}>{engagementPct}%</span>
-                        </div>
-                        <div className="h-1 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${engagementPct}%`, background: color }} />
-                        </div>
-                      </div>
-
-                      {/* Stats */}
-                      <div className="flex gap-2 flex-1">
-                        <div className="flex-1 rounded-lg bg-green-500/10 px-3 py-1.5 text-center">
+                      {/* Stats — 5-column grid on mobile, flex on desktop */}
+                      <div className="grid grid-cols-5 gap-1.5 sm:flex sm:gap-2 sm:flex-1">
+                        <div className="rounded-lg bg-green-500/10 px-2 py-1.5 text-center">
                           <p className="text-sm font-bold text-green-600 leading-none">{cat.totalWatched}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">Vistos</p>
                         </div>
-                        <div className="flex-1 rounded-lg bg-indigo-500/10 px-3 py-1.5 text-center">
+                        <div className="rounded-lg bg-indigo-500/10 px-2 py-1.5 text-center">
                           <p className="text-sm font-bold text-indigo-500 leading-none">{cat.totalPending}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">Pendientes</p>
                         </div>
-                        <div className="flex-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-center">
+                        <div className="rounded-lg bg-orange-500/10 px-2 py-1.5 text-center">
                           <p className="text-sm font-bold text-orange-500 leading-none">{cat.ghostChannels}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">Fantasmas</p>
                         </div>
-                        <div className="flex-1 rounded-lg bg-muted/60 px-3 py-1.5 text-center">
+                        <div className="rounded-lg bg-muted/60 px-2 py-1.5 text-center">
                           <p className="text-sm font-bold text-muted-foreground leading-none">{inactive}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">Inactivos</p>
                         </div>
-                        <div className="flex-1 rounded-lg bg-muted/40 px-3 py-1.5 text-center">
+                        <div className="rounded-lg bg-muted/40 px-2 py-1.5 text-center">
                           <p className="text-sm font-bold text-muted-foreground leading-none">{cat.channelCount}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">Canales</p>
                         </div>
