@@ -107,9 +107,15 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
         events: {
           onError: (e) => { if ([100, 101, 150].includes(e.data)) setEmbedError(true) },
           onStateChange: (e) => {
-            if (e.data === window.YT.PlayerState.ENDED && !watched) {
-              setWatched(true)
-              onWatched?.(activeId)
+            if (e.data === window.YT.PlayerState.ENDED) {
+              if (!watched) {
+                setWatched(true)
+                onWatched?.(activeId)
+              }
+              const currentIdx = queueList.findIndex(v => (v.video_id ?? v.videoId) === activeId)
+              if (currentIdx >= 0 && currentIdx < queueList.length - 1) {
+                handlePlayVideo(queueList[currentIdx + 1])
+              }
             }
           },
         },
