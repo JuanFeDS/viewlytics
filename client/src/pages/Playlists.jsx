@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ListVideo, ChevronRight, ArrowLeft, Clock, Star, ExternalLink } from 'lucide-react'
+import { ListVideo, ChevronRight, ArrowLeft, Clock, Star, ExternalLink, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
+import VideoPlayerModal from '@/components/VideoPlayerModal'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,14 @@ export default function Playlists() {
   const [showDetail, setShowDetail] = useState(false)
   const [pendingIds, setPendingIds] = useState(new Set())
   const [favIds, setFavIds] = useState(new Set())
+  const [playing, setPlaying] = useState(null)
+
+  const toPlayer = (item) => ({
+    video_id: item.contentDetails.videoId,
+    title: item.snippet.title,
+    channel_title: item.snippet.videoOwnerChannelTitle,
+    thumbnail_url: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+  })
 
   useEffect(() => {
     api.get('/playlists').then(r => {
@@ -210,11 +219,20 @@ export default function Playlists() {
                           <CardContent className="p-3 flex gap-3 items-start">
                             <span className="text-muted-foreground text-xs w-5 shrink-0 pt-2 text-right">{i + 1}</span>
                             {item.snippet.thumbnails?.default?.url && (
-                              <img
-                                src={item.snippet.thumbnails.default.url}
-                                alt=""
-                                className="w-24 aspect-video rounded object-cover shrink-0"
-                              />
+                              <div
+                                role="button"
+                                onClick={() => setPlaying(toPlayer(item))}
+                                className="relative cursor-pointer group/thumb shrink-0"
+                              >
+                                <img
+                                  src={item.snippet.thumbnails.default.url}
+                                  alt=""
+                                  className="w-24 aspect-video rounded object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/40 transition-colors rounded flex items-center justify-center">
+                                  <Play className="size-4 text-white fill-white opacity-0 group-hover/thumb:opacity-100 transition-opacity" />
+                                </div>
+                              </div>
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm line-clamp-2">{item.snippet.title}</p>
@@ -266,5 +284,13 @@ export default function Playlists() {
         )}
       </div>
     </div>
+
+    {playing && (
+      <VideoPlayerModal
+        video={playing}
+        queue={items.map(toPlayer)}
+        onClose={() => setPlaying(null)}
+      />
+    )}
   )
 }
