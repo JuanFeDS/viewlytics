@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ExternalLink, CheckCircle, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { isoToSeconds } from '@/lib/youtube'
 
 function loadYouTubeAPI() {
   return new Promise((resolve) => {
@@ -74,6 +76,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const [watched, setWatched] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [sidebarTab, setSidebarTab] = useState('cola')
+  const [filterShorts, setFilterShorts] = useState(true)
   const [recentVideos, setRecentVideos] = useState([])
   const [recentLoading, setRecentLoading] = useState(false)
   const [recentError, setRecentError] = useState(null)
@@ -155,20 +158,26 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
         url.searchParams.set('order', 'date')
         url.searchParams.set('type', 'video')
         url.searchParams.set('maxResults', '15')
-        return fetch(url.toString()).then(r => r.json()).then(data => {
+        return fetch(url.toString()).then(r => r.json()).then(async data => {
           if (data.error) { setRecentError(data.error.message ?? 'Error de YouTube API'); return }
+          const candidates = (data.items ?? []).filter(item => item.id?.videoId && item.id.videoId !== activeId)
+          const ids = candidates.map(i => i.id.videoId).join(',')
+          const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${ids}&part=contentDetails`
+          const detailsData = await fetch(detailsUrl).then(r => r.json()).catch(() => ({ items: [] }))
+          const durationMap = Object.fromEntries(
+            (detailsData.items ?? []).map(i => [i.id, i.contentDetails?.duration ?? ''])
+          )
           setRecentVideos(
-            (data.items ?? [])
-              .filter(item => item.id?.videoId && item.id.videoId !== activeId)
-              .map(item => ({
-                video_id: item.id.videoId,
-                title: item.snippet.title,
-                channel_id: resolvedId,
-                channel_title: item.snippet.channelTitle,
-                thumbnail_url:
-                  item.snippet.thumbnails?.medium?.url ??
-                  item.snippet.thumbnails?.default?.url,
-              }))
+            candidates.map(item => ({
+              video_id: item.id.videoId,
+              title: item.snippet.title,
+              channel_id: resolvedId,
+              channel_title: item.snippet.channelTitle,
+              thumbnail_url:
+                item.snippet.thumbnails?.medium?.url ??
+                item.snippet.thumbnails?.default?.url,
+              duration: durationMap[item.id.videoId] ?? '',
+            }))
           )
         })
       })
@@ -315,15 +324,25 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
               </button>
             ))}
           </div>
+          <div className="px-2 py-1.5 border-b border-white/10 shrink-0 flex justify-end">
+            <Badge
+              variant={filterShorts ? 'secondary' : 'outline'}
+              className="cursor-pointer select-none text-xs"
+              onClick={() => setFilterShorts(f => !f)}
+            >
+              Sin Shorts
+            </Badge>
+          </div>
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5">
-            {sidebarTab === 'cola' && (
-              <>
-                {queueList.length === 0 ? (
-                  <p className="text-xs text-white/40 text-center py-10">Cola vacía</p>
-                ) : (
-                  queueList.map(v => (
+            {sidebarTab === 'cola' && (() => {
+              const visible = filterShorts
+                ? queueList.filter(v => !v.duration || isoToSeconds(v.duration) > 180)
+                : queueList
+              return visible.length === 0
+                ? <p className="text-xs text-white/40 text-center py-10">Cola vacía</p>
+                : visible.map(v => (
                     <SidebarItem
                       key={v.video_id ?? v.videoId}
                       video={v}
@@ -331,29 +350,27 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
                       onClick={handlePlayVideo}
                     />
                   ))
-                )}
-              </>
-            )}
+            })()}
 
-            {sidebarTab === 'recientes' && (
-              <>
-                {recentLoading
-                  ? <SidebarSkeleton />
-                  : recentError
-                    ? <p className="text-xs text-red-400/80 text-center py-10 px-3">{recentError}</p>
-                    : recentVideos.length === 0
-                      ? <p className="text-xs text-white/40 text-center py-10">Sin videos recientes</p>
-                      : recentVideos.map(v => (
-                          <SidebarItem
-                            key={v.video_id}
-                            video={v}
-                            isCurrent={false}
-                            onClick={handlePlayVideo}
-                          />
-                        ))
-                }
-              </>
-            )}
+            {sidebarTab === 'recientes' && (() => {
+              const visible = filterShorts
+                ? recentVideos.filter(v => isoToSeconds(v.duration) > 180)
+                : recentVideos
+              return recentLoading
+                ? <SidebarSkeleton />
+                : recentError
+                  ? <p className="text-xs text-red-400/80 text-center py-10 px-3">{recentError}</p>
+                  : visible.length === 0
+                    ? <p className="text-xs text-white/40 text-center py-10">Sin videos recientes</p>
+                    : visible.map(v => (
+                        <SidebarItem
+                          key={v.video_id}
+                          video={v}
+                          isCurrent={false}
+                          onClick={handlePlayVideo}
+                        />
+                      ))
+            })()}
           </div>
         </div>
       </div>
