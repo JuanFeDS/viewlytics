@@ -56,9 +56,7 @@ export async function getProviderToken(userId: string, supabase: ReturnType<type
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
 
   if (!data.provider_refresh_token || !clientId || !clientSecret) {
-    // No way to refresh — return the stored token and let the YouTube API
-    // reject with a clear error rather than failing silently here
-    return token
+    return null
   }
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -73,7 +71,7 @@ export async function getProviderToken(userId: string, supabase: ReturnType<type
   })
 
   const tokens = await res.json()
-  if (!tokens.access_token) return token  // refresh failed — return stored token as fallback
+  if (!tokens.access_token) return null  // refresh failed
 
   await supabase.from('profiles').update({
     provider_token: tokens.access_token,
