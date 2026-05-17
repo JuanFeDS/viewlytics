@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Search as SearchIcon, Plus, Star, Clock } from 'lucide-react'
+import { Search as SearchIcon, Plus, Star, Clock, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
+import VideoPlayerModal from '@/components/VideoPlayerModal'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,15 @@ export default function Search() {
   const [searched, setSearched] = useState(false)
   const [pendingIds, setPendingIds] = useState(new Set())
   const [favIds, setFavIds] = useState(new Set())
+  const [playing, setPlaying] = useState(null)
+
+  const toPlayer = (item) => ({
+    video_id: item.id.videoId,
+    title: item.snippet.title,
+    channel_id: item.snippet.channelId,
+    channel_title: item.snippet.channelTitle,
+    thumbnail_url: item.snippet.thumbnails?.medium?.url,
+  })
 
   // Load existing saved IDs on mount
   useEffect(() => {
@@ -133,13 +143,22 @@ export default function Search() {
               const inFav = favIds.has(videoId)
               return (
                 <Card key={videoId} className="overflow-hidden hover:shadow-md transition-shadow">
-                  <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer">
+                  <div
+                    role="button"
+                    onClick={() => setPlaying(toPlayer(item))}
+                    className="relative cursor-pointer group/thumb"
+                  >
                     <img
                       src={item.snippet.thumbnails?.medium?.url}
                       alt={item.snippet.title}
                       className="w-full aspect-video object-cover"
                     />
-                  </a>
+                    <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/40 transition-colors flex items-center justify-center">
+                      <div className="opacity-0 group-hover/thumb:opacity-100 transition-opacity bg-black/50 rounded-full p-2">
+                        <Play className="size-5 text-white fill-white" />
+                      </div>
+                    </div>
+                  </div>
                   <CardContent className="p-3">
                     <p className="font-medium text-sm line-clamp-2">{item.snippet.title}</p>
                     <p className="text-xs text-muted-foreground mt-1">{item.snippet.channelTitle}</p>
@@ -170,5 +189,13 @@ export default function Search() {
         )}
       </ScrollArea>
     </div>
+
+    {playing && (
+      <VideoPlayerModal
+        video={playing}
+        queue={results.map(toPlayer)}
+        onClose={() => setPlaying(null)}
+      />
+    )}
   )
 }
