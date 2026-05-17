@@ -69,6 +69,8 @@ function SidebarSkeleton() {
 export default function VideoPlayerModal({ video, onClose, onWatched, queue, onPlayVideo }) {
   const playerRef = useRef(null)
   const containerRef = useRef(null)
+  const queueRef = useRef(queue)
+  const handlePlayVideoRef = useRef(null)
 
   // Active video — can be changed internally via sidebar
   const [activeVideo, setActiveVideo] = useState(video)
@@ -80,6 +82,9 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const [recentVideos, setRecentVideos] = useState([])
   const [recentLoading, setRecentLoading] = useState(false)
   const [recentError, setRecentError] = useState(null)
+
+  // Keep refs fresh every render
+  queueRef.current = queue ?? []
 
   // Sync when parent changes the video
   useEffect(() => { setActiveVideo(video); setConfirmingClose(false) }, [video])
@@ -108,13 +113,14 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
           onError: (e) => { if ([100, 101, 150].includes(e.data)) setEmbedError(true) },
           onStateChange: (e) => {
             if (e.data === window.YT.PlayerState.ENDED) {
-              if (!watched) {
-                setWatched(true)
-                onWatched?.(activeId)
-              }
-              const currentIdx = queueList.findIndex(v => (v.video_id ?? v.videoId) === activeId)
-              if (currentIdx >= 0 && currentIdx < queueList.length - 1) {
-                handlePlayVideo(queueList[currentIdx + 1])
+              setWatched(prev => {
+                if (!prev) onWatched?.(activeId)
+                return true
+              })
+              const list = queueRef.current ?? []
+              const currentIdx = list.findIndex(v => (v.video_id ?? v.videoId) === activeId)
+              if (currentIdx >= 0 && currentIdx < list.length - 1) {
+                handlePlayVideoRef.current?.(list[currentIdx + 1])
               }
             }
           },
@@ -206,6 +212,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
     setActiveVideo(v)
     onPlayVideo?.(v)
   }
+  handlePlayVideoRef.current = handlePlayVideo
 
   if (!activeVideo) return null
 
