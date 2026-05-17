@@ -69,6 +69,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const onWatchedRef = useRef(onWatched)
   const handlePlayVideoRef = useRef(null)
   const watchedRef = useRef(false)
+  const nextVideoRef = useRef(null)
 
   const [activeVideo, setActiveVideo] = useState(video)
   const [embedError, setEmbedError] = useState(false)
@@ -85,6 +86,16 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   // Keep refs fresh every render
   queueRef.current = queue ?? []
   onWatchedRef.current = onWatched
+
+  // Compute next video every render so the YT callback always has a fresh value
+  const queueList = queue ?? []
+  const currentQueueIdx = queueList.findIndex(v => (v.video_id ?? v.videoId) === (activeVideo?.video_id ?? activeVideo?.videoId))
+  nextVideoRef.current =
+    currentQueueIdx >= 0 && currentQueueIdx < queueList.length - 1
+      ? queueList[currentQueueIdx + 1]          // normal case: next after current
+      : currentQueueIdx === -1 && queueList.length > 0
+        ? queueList[0]                           // current not in queue: start from first
+        : null
 
   // Sync when parent changes the video prop
   useEffect(() => {
@@ -130,11 +141,10 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
               onWatchedRef.current?.(currentId)
             }
 
-            // Find next video in queue and start countdown
-            const list = queueRef.current
-            const currentIdx = list.findIndex(v => (v.video_id ?? v.videoId) === currentId)
-            if (currentIdx >= 0 && currentIdx < list.length - 1) {
-              setCountdownVideo(list[currentIdx + 1])
+            // Find next video and start countdown
+            const next = nextVideoRef.current
+            if (next) {
+              setCountdownVideo(next)
               setCountdown(AUTOPLAY_SECONDS)
             }
           },
@@ -242,7 +252,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   if (!activeVideo) return null
 
   const ytUrl = `https://www.youtube.com/watch?v=${activeId}`
-  const queueList = queue ?? []
   const channelName = activeVideo.channel_title ?? activeVideo.channelTitle
 
   return createPortal(
