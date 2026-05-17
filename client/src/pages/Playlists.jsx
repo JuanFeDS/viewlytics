@@ -141,6 +141,7 @@ export default function Playlists() {
   }
 
   return (
+    <>
     <div className="flex h-[calc(100vh-56px)]">
       {/* Playlist list — full screen on mobile (hidden when detail showing), sidebar on sm+ */}
       <div className={`${showDetail ? 'hidden sm:flex' : 'flex'} flex-col w-full sm:w-72 sm:shrink-0 border-r`}>
@@ -292,5 +293,6 @@ export default function Playlists() {
         onClose={() => setPlaying(null)}
       />
     )}
+    </>
   )
 }
