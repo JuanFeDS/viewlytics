@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Star, Clock, X, Play } from 'lucide-react'
-import { toast } from 'sonner'
 import api from '@/lib/api'
 import VideoPlayerModal from '@/components/VideoPlayerModal'
+import { fetchChannelVideos } from '@/lib/youtube'
 import { parseDuration, formatViews, timeAgo, isoToSeconds } from '@/lib/youtube'
+import { useSavedIds } from '@/hooks/useSavedIds'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -24,16 +25,15 @@ function VideoSkeleton() {
 }
 
 export default function ChannelDrawer({ channel, open, onClose }) {
-  const [data, setData] = useState(null)
+  const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(false)
-  const [pendingIds, setPendingIds] = useState(new Set())
-  const [favIds, setFavIds] = useState(new Set())
   const [mounted, setMounted] = useState(false)
   const [filterShorts, setFilterShorts] = useState(true)
   const [videoCount, setVideoCount] = useState(5)
   const [playing, setPlaying] = useState(null)
 
-  // Animate in/out
+  const { pendingIds, favIds, addToPending, removeFromPending, addToFavorites, removeFromFavorites } = useSavedIds()
+
   useEffect(() => {
     if (open) {
       setMounted(true)
@@ -43,78 +43,23 @@ export default function ChannelDrawer({ channel, open, onClose }) {
     }
   }, [open])
 
-  // Fetch channel data + existing pending/favorites
   useEffect(() => {
     if (!open || !channel?.channelId) return
     const controller = new AbortController()
-    setData(null)
+    setVideos([])
     setLoading(true)
-    setPendingIds(new Set())
-    setFavIds(new Set())
     setFilterShorts(true)
     setVideoCount(5)
 
     const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
-
-    // Load existing saved IDs — independent of video fetch so one never blocks the other
-    Promise.all([
-      api.get('/pending').then(r => (r.data ?? []).map(v => v.video_id)).catch(() => []),
-      api.get('/favorites').then(r => (r.data ?? []).map(v => v.video_id)).catch(() => []),
-    ]).then(([p, f]) => {
-      setPendingIds(new Set(p))
-      setFavIds(new Set(f))
-    })
-
-    async function fetchVideos() {
-      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
-      searchUrl.searchParams.set('key', apiKey)
-      searchUrl.searchParams.set('channelId', channel.channelId)
-      searchUrl.searchParams.set('part', 'snippet')
-      searchUrl.searchParams.set('order', 'date')
-      searchUrl.searchParams.set('type', 'video')
-      searchUrl.searchParams.set('maxResults', '50')
-
-      const searchRes = await fetch(searchUrl.toString(), { signal: controller.signal })
-      const searchData = await searchRes.json()
-      if (searchData.error) throw new Error(searchData.error.message)
-
-      const candidates = (searchData.items ?? [])
-        .map(item => ({
-          videoId: item.id?.videoId ?? '',
-          title: item.snippet?.title ?? '',
-          thumbnail: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? '',
-          publishedAt: item.snippet?.publishedAt ?? '',
-        }))
-        .filter(v => v.videoId)
-
-      const ids = candidates.map(v => v.videoId).join(',')
-      const detailsUrl = new URL('https://www.googleapis.com/youtube/v3/videos')
-      detailsUrl.searchParams.set('key', apiKey)
-      detailsUrl.searchParams.set('id', ids)
-      detailsUrl.searchParams.set('part', 'contentDetails')
-
-      const detailsRes = await fetch(detailsUrl.toString(), { signal: controller.signal })
-      const detailsData = await detailsRes.json()
-
-      const durationMap = Object.fromEntries(
-        (detailsData.items ?? []).map(item => [item.id, item.contentDetails?.duration ?? ''])
-      )
-
-      const videos = candidates.map(v => ({ ...v, duration: durationMap[v.videoId] ?? '' }))
-      setData({ channel: { id: channel.channelId, title: channel.title }, videos })
-    }
-
-    fetchVideos()
-      .catch(e => {
-        if (e.name === 'AbortError') return
-        setData({ videos: [], error: e.message })
-      })
+    fetchChannelVideos(apiKey, channel.channelId, { maxResults: 50, signal: controller.signal })
+      .then(setVideos)
+      .catch(e => { if (e.name !== 'AbortError') setVideos([]) })
       .finally(() => setLoading(false))
 
     return () => controller.abort()
   }, [open, channel?.channelId])
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -122,90 +67,24 @@ export default function ChannelDrawer({ channel, open, onClose }) {
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  const addToPending = async (video) => {
-    try {
-      await api.post('/pending', {
-        video_id: video.videoId,
-        title: video.title,
-        channel_id: channel.channelId,
-        channel_title: channel.title,
-        thumbnail_url: video.thumbnail,
-      })
-      setPendingIds(prev => new Set([...prev, video.videoId]))
-      toast.success('Agregado a pendientes')
-    } catch (e) {
-      const msg = e.response?.data?.error ?? e.message
-      if (e.response?.status === 409) {
-        setPendingIds(prev => new Set([...prev, video.videoId]))
-      } else {
-        toast.error('No se pudo agregar a pendientes', { description: msg })
-      }
-    }
-  }
-
-  const addToFavorites = async (video) => {
-    try {
-      await api.post('/favorites', {
-        video_id: video.videoId,
-        title: video.title,
-        channel_id: channel.channelId,
-        channel_title: channel.title,
-        thumbnail_url: video.thumbnail,
-      })
-      setFavIds(prev => new Set([...prev, video.videoId]))
-      toast.success('Guardado en favoritos')
-    } catch (e) {
-      const msg = e.response?.data?.error ?? e.message
-      if (e.response?.status === 409) {
-        setFavIds(prev => new Set([...prev, video.videoId]))
-      } else {
-        toast.error('No se pudo guardar en favoritos', { description: msg })
-      }
-    }
-  }
-
-  const removeFromPending = async (video) => {
-    try {
-      await api.delete(`/pending/${video.videoId}`)
-      setPendingIds(prev => { const s = new Set(prev); s.delete(video.videoId); return s })
-      toast.success('Quitado de pendientes')
-    } catch (e) {
-      toast.error('No se pudo quitar', { description: e.response?.data?.error ?? e.message })
-    }
-  }
-
-  const removeFromFavorites = async (video) => {
-    try {
-      await api.delete(`/favorites/${video.videoId}`)
-      setFavIds(prev => { const s = new Set(prev); s.delete(video.videoId); return s })
-      toast.success('Quitado de favoritos')
-    } catch (e) {
-      toast.error('No se pudo quitar', { description: e.response?.data?.error ?? e.message })
-    }
-  }
-
   if (!mounted && !open) return null
 
-  const visibleVideos = data?.videos
-    ? (filterShorts
-        ? data.videos.filter(v => isoToSeconds(v.duration) > 180).slice(0, videoCount)
-        : data.videos.slice(0, videoCount))
-    : []
+  const visibleVideos = filterShorts
+    ? videos.filter(v => isoToSeconds(v.duration) > 180).slice(0, videoCount)
+    : videos.slice(0, videoCount)
 
-  const toPlayer = (v) => ({ video_id: v.videoId, title: v.title, channel_id: channel?.channelId, channel_title: channel?.title, thumbnail_url: v.thumbnail })
+  const toPlayer = (v) => ({ ...v, channel_id: channel?.channelId, channel_title: v.channel_title ?? channel?.title })
 
   return (
     <>
       {createPortal(
         <>
-          {/* Backdrop */}
           <div
             onClick={onClose}
             className="fixed inset-0 z-40 bg-black/40 transition-opacity duration-300"
             style={{ opacity: open ? 1 : 0 }}
           />
 
-          {/* Drawer panel */}
           <div
             className="fixed inset-y-0 right-0 z-50 w-full max-w-[480px] bg-background border-l shadow-2xl transition-transform duration-300 ease-in-out"
             style={{
@@ -216,7 +95,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
           >
             {/* Header */}
             <div className="flex items-center gap-3 p-5">
-              {(data?.channel?.thumbnail || channel?.thumbnail) && (
+              {(channel?.thumbnail) && (
                 <a
                   href={`https://www.youtube.com/channel/${channel?.channelId}`}
                   target="_blank"
@@ -224,7 +103,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
                   className="shrink-0"
                 >
                   <img
-                    src={data?.channel?.thumbnail || channel?.thumbnail}
+                    src={channel.thumbnail}
                     alt=""
                     className="size-12 rounded-full object-cover hover:opacity-80 transition-opacity"
                   />
@@ -285,23 +164,20 @@ export default function ChannelDrawer({ channel, open, onClose }) {
               <div className="px-5 space-y-4 pb-6">
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => <VideoSkeleton key={i} />)
-                ) : data?.error ? (
-                  <p className="text-sm text-destructive text-center py-8">{data.error}</p>
                 ) : !visibleVideos.length ? (
                   <p className="text-sm text-muted-foreground text-center py-8">Sin videos recientes</p>
                 ) : (
                   visibleVideos.map(video => {
-                    const inPending = pendingIds.has(video.videoId)
-                    const inFav = favIds.has(video.videoId)
+                    const inPending = pendingIds.has(video.video_id)
+                    const inFav = favIds.has(video.video_id)
                     return (
-                      <div key={video.videoId} className="flex gap-3">
-                        {/* Thumbnail */}
+                      <div key={video.video_id} className="flex gap-3">
                         <div
                           role="button"
                           onClick={() => setPlaying(toPlayer(video))}
                           className="shrink-0 relative cursor-pointer group/thumb"
                         >
-                          <img src={video.thumbnail} alt="" className="w-36 aspect-video rounded-lg object-cover" />
+                          <img src={video.thumbnail_url} alt="" className="w-36 aspect-video rounded-lg object-cover" />
                           {video.duration && (
                             <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 rounded">
                               {parseDuration(video.duration)}
@@ -312,11 +188,10 @@ export default function ChannelDrawer({ channel, open, onClose }) {
                           </div>
                         </div>
 
-                        {/* Info */}
                         <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                           <div>
                             <a
-                              href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                              href={`https://www.youtube.com/watch?v=${video.video_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-medium line-clamp-2 hover:underline leading-tight"
@@ -333,13 +208,13 @@ export default function ChannelDrawer({ channel, open, onClose }) {
                               <Badge
                                 variant="secondary"
                                 className="text-xs gap-1 cursor-pointer hover:bg-destructive/15 hover:text-destructive transition-colors"
-                                onClick={() => removeFromPending(video)}
+                                onClick={() => removeFromPending(video.video_id)}
                                 title="Quitar de pendientes"
                               >
                                 <Clock className="size-2.5" /> En pendientes
                               </Badge>
                             ) : (
-                              <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => addToPending(video)}>
+                              <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => addToPending({ ...video, channel_id: channel?.channelId, channel_title: channel?.title })}>
                                 <Clock className="size-3 mr-1" /> Pendiente
                               </Button>
                             )}
@@ -347,7 +222,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
                               variant="outline"
                               size="icon"
                               className={`size-7 transition-colors ${inFav ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-red-500/20 hover:border-red-500/40 hover:text-red-500' : ''}`}
-                              onClick={() => inFav ? removeFromFavorites(video) : addToFavorites(video)}
+                              onClick={() => inFav ? removeFromFavorites(video.video_id) : addToFavorites({ ...video, channel_id: channel?.channelId, channel_title: channel?.title })}
                               title={inFav ? 'Quitar de favoritos' : 'Guardar en favoritos'}
                             >
                               <Star className={`size-3.5 ${inFav ? 'fill-amber-500' : ''}`} />
