@@ -295,7 +295,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
         </div>
 
         {/* Right: sidebar (hidden on small screens) */}
-        <div className="hidden lg:flex lg:w-64 xl:w-72 shrink-0 flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden max-h-[calc(100vh-8rem)]">
+        <div className="flex w-full lg:w-64 xl:w-72 shrink-0 flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden max-h-[50vh] lg:max-h-[calc(100vh-8rem)]">
           {/* Tab headers */}
           <div className="flex border-b border-white/10 shrink-0">
             {[
