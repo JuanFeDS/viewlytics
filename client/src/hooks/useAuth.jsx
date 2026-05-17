@@ -7,7 +7,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined)
 
   useEffect(() => {
+    // If auth hangs (expired token refresh on paused project), force login after 8s
+    const timeout = setTimeout(() => setUser(prev => prev === undefined ? null : prev), 8000)
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      clearTimeout(timeout)
       setUser(session?.user ?? null)
       if (event === 'SIGNED_IN' && session?.provider_token) {
         await supabase.from('profiles').upsert({
@@ -23,13 +27,20 @@ export function AuthProvider({ children }) {
       }
     })
 
-    // Fallback: onAuthStateChange reads from storage (no network), getSession makes HTTP call.
-    // Only updates if onAuthStateChange hasn't resolved yet (prev === undefined).
     supabase.auth.getSession()
-      .then(({ data: { session } }) => setUser(prev => prev === undefined ? (session?.user ?? null) : prev))
-      .catch(() => setUser(prev => prev === undefined ? null : prev))
+      .then(({ data: { session } }) => {
+        clearTimeout(timeout)
+        setUser(prev => prev === undefined ? (session?.user ?? null) : prev)
+      })
+      .catch(() => {
+        clearTimeout(timeout)
+        setUser(prev => prev === undefined ? null : prev)
+      })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   const logout = () => {
