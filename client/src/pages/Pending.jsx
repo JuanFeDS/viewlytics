@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle, Trash2, Clock, Eye, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
+import { fetchVideoSnippets } from '@/lib/youtube'
 import VideoPlayerModal from '@/components/VideoPlayerModal'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -112,20 +113,7 @@ export default function Pending() {
 
         if (missing.length > 0) {
           const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
-          const ids = missing.map(v => v.video_id).filter(Boolean).join(',')
-          const url = new URL('https://www.googleapis.com/youtube/v3/videos')
-          url.searchParams.set('key', apiKey)
-          url.searchParams.set('id', ids)
-          url.searchParams.set('part', 'snippet')
-
-          const ytData = await fetch(url.toString()).then(r => r.json()).catch(() => ({ items: [] }))
-          const byId = Object.fromEntries(
-            (ytData.items ?? []).map(item => [item.id, {
-              title: item.snippet?.title,
-              thumbnail_url: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url,
-              channel_title: item.snippet?.channelTitle,
-            }])
-          )
+          const byId = await fetchVideoSnippets(apiKey, missing.map(v => v.video_id).filter(Boolean))
 
           setVideos(videos.map(v => ({
             ...v,

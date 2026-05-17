@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/hooks/useTheme'
 import AppSidebar from '@/components/layout/AppSidebar'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import Login from '@/pages/Login'
+import { SavedIdsProvider } from '@/hooks/useSavedIds'
 import { LogOut } from 'lucide-react'
 import { Toaster } from 'sonner'
 import Subscriptions from '@/pages/Subscriptions'
@@ -65,6 +66,7 @@ function AppLayout() {
   if (!user) return <Login />
 
   return (
+    <SavedIdsProvider>
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
@@ -84,6 +86,7 @@ function AppLayout() {
         </div>
       </div>
     </SidebarProvider>
+    </SavedIdsProvider>
   )
 }
 

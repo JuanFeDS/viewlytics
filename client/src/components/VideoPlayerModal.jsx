@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { X, ExternalLink, CheckCircle, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { isoToSeconds } from '@/lib/youtube'
+import { isoToSeconds, fetchChannelVideos, resolveChannelId as resolveChannelIdUtil } from '@/lib/youtube'
 
 function loadYouTubeAPI() {
   return new Promise((resolve) => {
@@ -63,13 +63,22 @@ const AUTOPLAY_SECONDS = 5
 export default function VideoPlayerModal({ video, onClose, onWatched, queue, onPlayVideo }) {
   const playerRef = useRef(null)
   const containerRef = useRef(null)
-  // Refs kept fresh every render to avoid stale closures in YT event handlers
+
+  /**
+   * The YouTube IFrame API creates callbacks (onStateChange, onError) once at player
+   * construction time. Those callbacks form a closure over the values that existed when
+   * the effect ran, so props/state read inside them would be permanently stale.
+   *
+   * Solution: keep a ref for every value the callbacks need. Refs are mutable objects
+   * whose `.current` is always the latest value — no closure staleness.
+   * Each ref is written unconditionally in the render body so it stays fresh.
+   */
   const queueRef = useRef([])
   const activeIdRef = useRef(null)
   const onWatchedRef = useRef(onWatched)
   const handlePlayVideoRef = useRef(null)
-  const watchedRef = useRef(false)
-  const nextVideoRef = useRef(null)
+  const watchedRef = useRef(false)   // tracks whether onWatched has been called for the current video
+  const nextVideoRef = useRef(null)  // the video that would auto-play next, computed in render
 
   const [activeVideo, setActiveVideo] = useState(video)
   const [embedError, setEmbedError] = useState(false)
@@ -190,45 +199,14 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
 
     setRecentLoading(true)
 
-    const resolveChannelId = async () => {
-      if (channelId) return channelId
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${activeId}&part=snippet`)
-      const data = await res.json()
-      return data.items?.[0]?.snippet?.channelId ?? null
+    const load = async () => {
+      const resolvedId = channelId ?? await resolveChannelIdUtil(apiKey, activeId)
+      if (!resolvedId) { setRecentError('No se pudo obtener el canal del video'); return }
+      const videos = await fetchChannelVideos(apiKey, resolvedId, { maxResults: 15, excludeVideoId: activeId })
+      setRecentVideos(videos.map(v => ({ ...v, channel_id: resolvedId })))
     }
 
-    resolveChannelId()
-      .then(resolvedId => {
-        if (!resolvedId) { setRecentError('No se pudo obtener el canal del video'); return }
-        const url = new URL('https://www.googleapis.com/youtube/v3/search')
-        url.searchParams.set('key', apiKey)
-        url.searchParams.set('channelId', resolvedId)
-        url.searchParams.set('part', 'snippet')
-        url.searchParams.set('order', 'date')
-        url.searchParams.set('type', 'video')
-        url.searchParams.set('maxResults', '15')
-        return fetch(url.toString()).then(r => r.json()).then(async data => {
-          if (data.error) { setRecentError(data.error.message ?? 'Error de YouTube API'); return }
-          const candidates = (data.items ?? []).filter(item => item.id?.videoId && item.id.videoId !== activeId)
-          const ids = candidates.map(i => i.id.videoId).join(',')
-          const detailsData = await fetch(
-            `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${ids}&part=contentDetails`
-          ).then(r => r.json()).catch(() => ({ items: [] }))
-          const durationMap = Object.fromEntries(
-            (detailsData.items ?? []).map(i => [i.id, i.contentDetails?.duration ?? ''])
-          )
-          setRecentVideos(candidates.map(item => ({
-            video_id: item.id.videoId,
-            title: item.snippet.title,
-            channel_id: resolvedId,
-            channel_title: item.snippet.channelTitle,
-            thumbnail_url: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
-            duration: durationMap[item.id.videoId] ?? '',
-          })))
-        })
-      })
-      .catch(e => setRecentError(e.message))
-      .finally(() => setRecentLoading(false))
+    load().catch(e => setRecentError(e.message)).finally(() => setRecentLoading(false))
   }, [activeId])
 
   // Escape key

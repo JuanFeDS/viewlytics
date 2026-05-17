@@ -43,10 +43,8 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const logout = () => {
-    Object.keys(localStorage)
-      .filter(k => k.startsWith('sb-'))
-      .forEach(k => localStorage.removeItem(k))
+  const logout = async () => {
+    await supabase.auth.signOut().catch(() => {})
     window.location.replace(window.location.origin + '/viewlytics/')
   }
 

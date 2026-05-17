@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ListVideo, ChevronRight, ArrowLeft, Clock, Star, ExternalLink, Play } from 'lucide-react'
-import { toast } from 'sonner'
 import api from '@/lib/api'
 import VideoPlayerModal from '@/components/VideoPlayerModal'
+import { useSavedIds } from '@/hooks/useSavedIds'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,16 @@ function VideoItemSkeleton() {
   )
 }
 
+function toNormalized(item) {
+  return {
+    video_id: item.contentDetails.videoId,
+    title: item.snippet.title,
+    channel_id: item.snippet.videoOwnerChannelId,
+    channel_title: item.snippet.videoOwnerChannelTitle,
+    thumbnail_url: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+  }
+}
+
 export default function Playlists() {
   const [playlists, setPlaylists] = useState([])
   const [selected, setSelected] = useState(null)
@@ -44,29 +54,14 @@ export default function Playlists() {
   const [loadingPlaylists, setLoadingPlaylists] = useState(true)
   const [loadingItems, setLoadingItems] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
-  const [pendingIds, setPendingIds] = useState(new Set())
-  const [favIds, setFavIds] = useState(new Set())
   const [playing, setPlaying] = useState(null)
 
-  const toPlayer = (item) => ({
-    video_id: item.contentDetails.videoId,
-    title: item.snippet.title,
-    channel_title: item.snippet.videoOwnerChannelTitle,
-    thumbnail_url: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
-  })
+  const { pendingIds, favIds, addToPending, removeFromPending, addToFavorites, removeFromFavorites } = useSavedIds()
 
   useEffect(() => {
     api.get('/playlists').then(r => {
       setPlaylists(r.data)
       setLoadingPlaylists(false)
-    })
-
-    Promise.all([
-      api.get('/pending').then(r => (r.data ?? []).map(v => v.video_id)).catch(() => []),
-      api.get('/favorites').then(r => (r.data ?? []).map(v => v.video_id)).catch(() => []),
-    ]).then(([p, f]) => {
-      setPendingIds(new Set(p))
-      setFavIds(new Set(f))
     })
   }, [])
 
@@ -79,71 +74,10 @@ export default function Playlists() {
     setLoadingItems(false)
   }
 
-  const addToPending = async (item) => {
-    const videoId = item.contentDetails.videoId
-    try {
-      await api.post('/pending', {
-        video_id: videoId,
-        title: item.snippet.title,
-        channel_id: item.snippet.videoOwnerChannelId,
-        channel_title: item.snippet.videoOwnerChannelTitle,
-        thumbnail_url: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
-      })
-      setPendingIds(prev => new Set([...prev, videoId]))
-      toast.success('Agregado a pendientes')
-    } catch (e) {
-      if (e.response?.status === 409) {
-        setPendingIds(prev => new Set([...prev, videoId]))
-      } else {
-        toast.error('No se pudo agregar a pendientes')
-      }
-    }
-  }
-
-  const removeFromPending = async (videoId) => {
-    try {
-      await api.delete(`/pending/${videoId}`)
-      setPendingIds(prev => { const s = new Set(prev); s.delete(videoId); return s })
-      toast.success('Quitado de pendientes')
-    } catch (e) {
-      toast.error('No se pudo quitar', { description: e.response?.data?.error ?? e.message })
-    }
-  }
-
-  const addToFavorites = async (item) => {
-    const videoId = item.contentDetails.videoId
-    try {
-      await api.post('/favorites', {
-        video_id: videoId,
-        title: item.snippet.title,
-        channel_title: item.snippet.videoOwnerChannelTitle,
-        thumbnail_url: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
-      })
-      setFavIds(prev => new Set([...prev, videoId]))
-      toast.success('Guardado en favoritos')
-    } catch (e) {
-      if (e.response?.status === 409) {
-        setFavIds(prev => new Set([...prev, videoId]))
-      } else {
-        toast.error('No se pudo guardar en favoritos')
-      }
-    }
-  }
-
-  const removeFromFavorites = async (videoId) => {
-    try {
-      await api.delete(`/favorites/${videoId}`)
-      setFavIds(prev => { const s = new Set(prev); s.delete(videoId); return s })
-      toast.success('Quitado de favoritos')
-    } catch (e) {
-      toast.error('No se pudo quitar', { description: e.response?.data?.error ?? e.message })
-    }
-  }
-
   return (
     <>
     <div className="flex h-[calc(100vh-56px)]">
-      {/* Playlist list — full screen on mobile (hidden when detail showing), sidebar on sm+ */}
+      {/* Playlist list */}
       <div className={`${showDetail ? 'hidden sm:flex' : 'flex'} flex-col w-full sm:w-72 sm:shrink-0 border-r`}>
         <div className="p-4 border-b">
           <p className="text-sm text-muted-foreground">
@@ -181,7 +115,7 @@ export default function Playlists() {
         </ScrollArea>
       </div>
 
-      {/* Detail panel — full screen on mobile when showDetail, always visible on sm+ */}
+      {/* Detail panel */}
       <div className={`${showDetail ? 'flex' : 'hidden sm:flex'} flex-col flex-1 min-w-0`}>
         {!selected ? (
           <div className="flex-1 flex items-center justify-center">
@@ -222,7 +156,7 @@ export default function Playlists() {
                             {item.snippet.thumbnails?.default?.url && (
                               <div
                                 role="button"
-                                onClick={() => setPlaying(toPlayer(item))}
+                                onClick={() => setPlaying(toNormalized(item))}
                                 className="relative cursor-pointer group/thumb shrink-0"
                               >
                                 <img
@@ -249,7 +183,7 @@ export default function Playlists() {
                                     <Clock className="size-2.5" /> En pendientes
                                   </Badge>
                                 ) : (
-                                  <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => addToPending(item)}>
+                                  <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => addToPending(toNormalized(item))}>
                                     <Clock className="size-3 mr-1" /> Pendiente
                                   </Button>
                                 )}
@@ -257,7 +191,7 @@ export default function Playlists() {
                                   variant="outline"
                                   size="icon"
                                   className={`size-7 transition-colors ${inFav ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-red-500/20 hover:border-red-500/40 hover:text-red-500' : ''}`}
-                                  onClick={() => inFav ? removeFromFavorites(videoId) : addToFavorites(item)}
+                                  onClick={() => inFav ? removeFromFavorites(videoId) : addToFavorites(toNormalized(item))}
                                   title={inFav ? 'Quitar de favoritos' : 'Guardar en favoritos'}
                                 >
                                   <Star className={`size-3.5 ${inFav ? 'fill-amber-500' : ''}`} />
@@ -289,7 +223,7 @@ export default function Playlists() {
     {playing && (
       <VideoPlayerModal
         video={playing}
-        queue={items.map(toPlayer)}
+        queue={items.map(toNormalized)}
         onClose={() => setPlaying(null)}
       />
     )}
