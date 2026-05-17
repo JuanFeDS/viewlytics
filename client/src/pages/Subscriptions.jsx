@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Plus, Tag, X, Users, Loader2 } from 'lucide-react'
+import { Plus, Tag, X, Users, Loader2, RefreshCw } from 'lucide-react'
 import api from '@/lib/api'
 import { toast } from 'sonner'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ function SubscriptionSkeleton() {
 }
 
 export default function Subscriptions() {
+  const { logout } = useAuth()
   const [subscriptions, setSubscriptions] = useState([])
   const [categories, setCategories] = useState([])
   const [mappings, setMappings] = useState([])
@@ -176,7 +178,19 @@ export default function Subscriptions() {
       </div>
 
       {error && (
-        <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{error}</p>
+        error === 'YouTube not connected' ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Tu sesión con YouTube expiró. Vuelve a iniciar sesión para reconectarla.
+            </p>
+            <Button variant="outline" size="sm" onClick={logout}>
+              <RefreshCw className="size-4 mr-2" />
+              Volver a iniciar sesión
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">{error}</p>
+        )
       )}
 
       {loading ? (
