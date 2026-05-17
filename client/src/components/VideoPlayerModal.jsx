@@ -79,7 +79,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const [recentError, setRecentError] = useState(null)
 
   // Sync when parent changes the video
-  useEffect(() => { setActiveVideo(video) }, [video])
+  useEffect(() => { setActiveVideo(video); setConfirmingClose(false) }, [video])
 
   const activeId = activeVideo?.video_id ?? activeVideo?.videoId
 
