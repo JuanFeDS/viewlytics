@@ -107,6 +107,7 @@ export default function Search() {
   }
 
   return (
+    <>
     <div className="p-6 space-y-5">
       <div className="flex gap-2 max-w-xl">
         <Input
@@ -197,5 +198,6 @@ export default function Search() {
         onClose={() => setPlaying(null)}
       />
     )}
+    </>
   )
 }
