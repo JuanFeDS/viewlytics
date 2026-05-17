@@ -171,7 +171,6 @@ export default function Pending() {
       onClose={() => setPlayerVideo(null)}
       onWatched={(videoId) => {
         markWatched(videoId)
-        setPlayerVideo(null)
       }}
       queue={pending}
       onPlayVideo={setPlayerVideo}
