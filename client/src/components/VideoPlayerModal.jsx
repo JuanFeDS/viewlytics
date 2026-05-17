@@ -66,13 +66,19 @@ function SidebarSkeleton() {
   ))
 }
 
+const AUTOPLAY_SECONDS = 5
+
 export default function VideoPlayerModal({ video, onClose, onWatched, queue, onPlayVideo }) {
   const playerRef = useRef(null)
   const containerRef = useRef(null)
-  const queueRef = useRef(queue)
-  const handlePlayVideoRef = useRef(null)
 
-  // Active video — can be changed internally via sidebar
+  // Refs kept fresh every render to avoid stale closures in YT event handlers
+  const queueRef = useRef(queue)
+  const activeIdRef = useRef(null)
+  const onWatchedRef = useRef(onWatched)
+  const handlePlayVideoRef = useRef(null)
+  const watchedRef = useRef(false)
+
   const [activeVideo, setActiveVideo] = useState(video)
   const [embedError, setEmbedError] = useState(false)
   const [watched, setWatched] = useState(false)
@@ -82,20 +88,30 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const [recentVideos, setRecentVideos] = useState([])
   const [recentLoading, setRecentLoading] = useState(false)
   const [recentError, setRecentError] = useState(null)
+  const [countdownVideo, setCountdownVideo] = useState(null)
+  const [countdown, setCountdown] = useState(AUTOPLAY_SECONDS)
 
   // Keep refs fresh every render
   queueRef.current = queue ?? []
+  onWatchedRef.current = onWatched
 
   // Sync when parent changes the video
-  useEffect(() => { setActiveVideo(video); setConfirmingClose(false) }, [video])
+  useEffect(() => {
+    setActiveVideo(video)
+    setConfirmingClose(false)
+    setCountdownVideo(null)
+  }, [video])
 
   const activeId = activeVideo?.video_id ?? activeVideo?.videoId
+  activeIdRef.current = activeId
 
   // YouTube IFrame player
   useEffect(() => {
     if (!activeVideo) return
     setEmbedError(false)
     setWatched(false)
+    watchedRef.current = false
+    setCountdownVideo(null)
 
     let destroyed = false
 
@@ -105,7 +121,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
       const playerDiv = document.createElement('div')
       containerRef.current.appendChild(playerDiv)
       playerRef.current = new YT.Player(playerDiv, {
-        videoId: activeId,
+        videoId: activeIdRef.current,
         width: '100%',
         height: '100%',
         playerVars: { autoplay: 1, rel: 0, modestbranding: 1 },
@@ -113,14 +129,21 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
           onError: (e) => { if ([100, 101, 150].includes(e.data)) setEmbedError(true) },
           onStateChange: (e) => {
             if (e.data === window.YT.PlayerState.ENDED) {
-              setWatched(prev => {
-                if (!prev) onWatched?.(activeId)
-                return true
-              })
-              const list = queueRef.current ?? []
-              const currentIdx = list.findIndex(v => (v.video_id ?? v.videoId) === activeId)
+              const currentId = activeIdRef.current
+
+              // Mark as watched (only once)
+              if (!watchedRef.current) {
+                watchedRef.current = true
+                setWatched(true)
+                onWatchedRef.current?.(currentId)
+              }
+
+              // Find next video in queue and start countdown
+              const list = queueRef.current
+              const currentIdx = list.findIndex(v => (v.video_id ?? v.videoId) === currentId)
               if (currentIdx >= 0 && currentIdx < list.length - 1) {
-                handlePlayVideoRef.current?.(list[currentIdx + 1])
+                setCountdownVideo(list[currentIdx + 1])
+                setCountdown(AUTOPLAY_SECONDS)
               }
             }
           },
@@ -134,6 +157,23 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
       playerRef.current = null
     }
   }, [activeId])
+
+  // Countdown timer
+  useEffect(() => {
+    if (!countdownVideo) return
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          handlePlayVideoRef.current?.(countdownVideo)
+          setCountdownVideo(null)
+          return AUTOPLAY_SECONDS
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [countdownVideo])
 
   // Fetch recent videos from the active video's channel
   useEffect(() => {
@@ -150,7 +190,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
 
     setRecentLoading(true)
 
-    // If channel_id is missing, resolve it first via videos.list (1 quota unit)
     const resolveChannelId = async () => {
       if (channelId) return channelId
       const res = await fetch(
@@ -231,7 +270,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
       >
       <div className="relative w-full max-w-6xl flex flex-col lg:flex-row gap-4 items-stretch">
 
-        {/* Close button — top-right corner of the whole modal card */}
+        {/* Close button */}
         <button
           onClick={() => setConfirmingClose(true)}
           className="absolute -top-2 -right-2 z-30 flex items-center justify-center size-8 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white/70 hover:text-white transition-colors shadow-lg"
@@ -257,6 +296,43 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
               </div>
             ) : (
               <div ref={containerRef} className="w-full h-full" />
+            )}
+
+            {/* Autoplay countdown — bottom bar */}
+            {countdownVideo && !confirmingClose && (
+              <div className="absolute bottom-0 inset-x-0 z-10 p-3">
+                <div className="flex items-center gap-3 bg-zinc-900/95 border border-white/10 rounded-xl p-3 shadow-xl">
+                  {countdownVideo.thumbnail_url && (
+                    <img
+                      src={countdownVideo.thumbnail_url}
+                      alt=""
+                      className="w-20 aspect-video rounded-md object-cover shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white/50 text-[10px] uppercase tracking-wider">A continuación</p>
+                    <p className="text-white text-xs font-medium line-clamp-1 mt-0.5">{countdownVideo.title}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => {
+                        setCountdownVideo(null)
+                        handlePlayVideo(countdownVideo)
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black rounded-lg text-xs font-medium hover:bg-white/90 transition-colors"
+                    >
+                      <Play className="size-3 fill-black" /> Reproducir
+                    </button>
+                    <button
+                      onClick={() => setCountdownVideo(null)}
+                      className="flex items-center justify-center size-8 text-white/60 hover:text-white border border-white/15 hover:border-white/30 rounded-lg text-sm font-semibold transition-colors"
+                      title="Cancelar"
+                    >
+                      {countdown}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Confirm close overlay */}
@@ -316,9 +392,8 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
           </div>
         </div>
 
-        {/* Right: sidebar (hidden on small screens) */}
+        {/* Right: sidebar */}
         <div className="flex w-full lg:w-64 xl:w-72 shrink-0 flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden max-h-[50vh] lg:max-h-[calc(100vh-8rem)]">
-          {/* Tab headers */}
           <div className="flex border-b border-white/10 shrink-0">
             {[
               { id: 'cola', label: `Cola${queueList.length > 0 ? ` (${queueList.length})` : ''}` },
@@ -347,7 +422,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
             </Badge>
           </div>
 
-          {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5">
             {sidebarTab === 'cola' && (() => {
               const visible = filterShorts
