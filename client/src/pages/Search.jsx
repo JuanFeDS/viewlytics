@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search as SearchIcon, Plus, Star, Clock, Play } from 'lucide-react'
 import api from '@/lib/api'
-import VideoPlayerModal from '@/components/VideoPlayerModal'
+import { usePlayer } from '@/hooks/usePlayer'
 import { useSavedIds } from '@/hooks/useSavedIds'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -39,9 +39,9 @@ export default function Search() {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
-  const [playing, setPlaying] = useState(null)
 
   const { pendingIds, favIds, addToPending, addToFavorites } = useSavedIds()
+  const { open: openPlayer } = usePlayer()
 
   const doSearch = async () => {
     if (!query.trim()) return
@@ -97,7 +97,7 @@ export default function Search() {
                 <Card key={videoId} className="overflow-hidden hover:shadow-md transition-shadow">
                   <div
                     role="button"
-                    onClick={() => setPlaying(toNormalized(item))}
+                    onClick={() => openPlayer(toNormalized(item), results.map(toNormalized))}
                     className="relative cursor-pointer group/thumb"
                   >
                     <img
@@ -142,13 +142,6 @@ export default function Search() {
       </ScrollArea>
     </div>
 
-    {playing && (
-      <VideoPlayerModal
-        video={playing}
-        queue={results.map(toNormalized)}
-        onClose={() => setPlaying(null)}
-      />
-    )}
     </>
   )
 }

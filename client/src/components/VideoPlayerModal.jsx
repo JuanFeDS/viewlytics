@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, ExternalLink, CheckCircle, Play } from 'lucide-react'
+import { X, ExternalLink, CheckCircle, Play, Maximize2, PictureInPicture2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { isoToSeconds, fetchChannelVideos, resolveChannelId as resolveChannelIdUtil } from '@/lib/youtube'
+import { usePlayer } from '@/hooks/usePlayer'
 
 function loadYouTubeAPI() {
   return new Promise((resolve) => {
@@ -60,9 +61,16 @@ function SidebarSkeleton() {
 
 const AUTOPLAY_SECONDS = 5
 
-export default function VideoPlayerModal({ video, onClose, onWatched, queue, onPlayVideo }) {
+export default function VideoPlayerModal({ video, onClose, onWatched, queue, onExpand, mini }) {
   const playerRef = useRef(null)
   const containerRef = useRef(null)
+  const { pipRequestRef } = usePlayer()
+
+  // Document Picture-in-Picture state
+  const [pipOpen, setPipOpen] = useState(false)
+  const pipWindowRef = useRef(null)
+  const pipStartRef = useRef(0)       // last known playback position (seconds)
+  const openDocPiPRef = useRef(null)  // always-fresh ref to openDocPiP
 
   /**
    * The YouTube IFrame API creates callbacks (onStateChange, onError) once at player
@@ -77,8 +85,8 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const activeIdRef = useRef(null)
   const onWatchedRef = useRef(onWatched)
   const handlePlayVideoRef = useRef(null)
-  const watchedRef = useRef(false)   // tracks whether onWatched has been called for the current video
-  const nextVideoRef = useRef(null)  // the video that would auto-play next, computed in render
+  const watchedRef = useRef(false)
+  const nextVideoRef = useRef(null)
 
   const [activeVideo, setActiveVideo] = useState(video)
   const [embedError, setEmbedError] = useState(false)
@@ -92,21 +100,18 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const [countdownVideo, setCountdownVideo] = useState(null)
   const [countdown, setCountdown] = useState(AUTOPLAY_SECONDS)
 
-  // Keep refs fresh every render
   queueRef.current = queue ?? []
   onWatchedRef.current = onWatched
 
-  // Compute next video every render so the YT callback always has a fresh value
   const queueList = queue ?? []
   const currentQueueIdx = queueList.findIndex(v => (v.video_id ?? v.videoId) === (activeVideo?.video_id ?? activeVideo?.videoId))
   nextVideoRef.current =
     currentQueueIdx >= 0 && currentQueueIdx < queueList.length - 1
-      ? queueList[currentQueueIdx + 1]          // normal case: next after current
+      ? queueList[currentQueueIdx + 1]
       : currentQueueIdx === -1 && queueList.length > 0
-        ? queueList[0]                           // current not in queue: start from first
+        ? queueList[0]
         : null
 
-  // Sync when parent changes the video prop
   useEffect(() => {
     setActiveVideo(video)
     setConfirmingClose(false)
@@ -116,7 +121,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const activeId = activeVideo?.video_id ?? activeVideo?.videoId
   activeIdRef.current = activeId
 
-  // YouTube IFrame player
   useEffect(() => {
     if (!activeVideo) return
     setEmbedError(false)
@@ -139,18 +143,15 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
         events: {
           onError: (e) => { if ([100, 101, 150].includes(e.data)) setEmbedError(true) },
           onStateChange: (e) => {
-            // PlayerState.ENDED = 0
             if (e.data !== 0) return
             const currentId = activeIdRef.current
 
-            // Mark as watched (only once per video)
             if (!watchedRef.current) {
               watchedRef.current = true
               setWatched(true)
               onWatchedRef.current?.(currentId)
             }
 
-            // Find next video and start countdown
             const next = nextVideoRef.current
             if (next) {
               setCountdownVideo(next)
@@ -168,7 +169,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
     }
   }, [activeId])
 
-  // Countdown timer — runs when a next video is queued
   useEffect(() => {
     if (!countdownVideo) return
     const next = countdownVideo
@@ -187,7 +187,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
     return () => clearInterval(interval)
   }, [countdownVideo])
 
-  // Fetch recent videos from the active video's channel
   useEffect(() => {
     setRecentVideos([])
     setRecentError(null)
@@ -209,8 +208,8 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
     load().catch(e => setRecentError(e.message)).finally(() => setRecentLoading(false))
   }, [activeId])
 
-  // Escape key
   useEffect(() => {
+    if (mini) return
     const handler = (e) => {
       if (e.key === 'Escape') {
         if (confirmingClose) setConfirmingClose(false)
@@ -219,12 +218,63 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [confirmingClose])
+  }, [confirmingClose, mini])
 
-  const handlePlayVideo = (v) => {
-    setActiveVideo(v)
-    onPlayVideo?.(v)
+  // Save playback position every 2s so PiP can start from the right spot
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const t = playerRef.current?.getCurrentTime?.()
+      if (typeof t === 'number') pipStartRef.current = Math.floor(t)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Register openDocPiP in context so RouteWatcher can trigger it
+  useEffect(() => {
+    if (!pipRequestRef) return
+    pipRequestRef.current = () => openDocPiPRef.current?.()
+    return () => { pipRequestRef.current = null }
+  }, [pipRequestRef])
+
+  async function openDocPiP() {
+    if (!window.documentPictureInPicture) return false
+    if (pipWindowRef.current && !pipWindowRef.current.closed) return true
+
+    try {
+      playerRef.current?.pauseVideo?.()
+
+      const pip = await window.documentPictureInPicture.requestWindow({
+        width: 336,
+        height: 229, // 336×(9/16) = 189px video + 40px title bar
+      })
+
+      // Set base href so YouTube's embed can verify the origin (fixes Error 153)
+      const base = pip.document.createElement('base')
+      base.href = window.location.origin
+      pip.document.head.appendChild(base)
+
+      // Minimal reset so the pip document is clean
+      pip.document.documentElement.style.cssText =
+        'margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden'
+      pip.document.body.style.cssText =
+        'margin:0;padding:0;width:100%;height:100%;display:flex;flex-direction:column'
+
+      pipWindowRef.current = pip
+      setPipOpen(true)
+
+      pip.addEventListener('pagehide', () => {
+        pipWindowRef.current = null
+        setPipOpen(false)
+      })
+
+      return true
+    } catch {
+      return false
+    }
   }
+  openDocPiPRef.current = openDocPiP
+
+  const handlePlayVideo = (v) => setActiveVideo(v)
   handlePlayVideoRef.current = handlePlayVideo
 
   if (!activeVideo) return null
@@ -232,33 +282,77 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
   const ytUrl = `https://www.youtube.com/watch?v=${activeId}`
   const channelName = activeVideo.channel_title ?? activeVideo.channelTitle
 
-  return createPortal(
+  // ─── Document PiP portal ────────────────────────────────────────────────────
+  const pipPortal = pipOpen && pipWindowRef.current && createPortal(
+    <>
+      <iframe
+        key={activeId}
+        src={`https://www.youtube.com/embed/${activeId}?autoplay=1&start=${pipStartRef.current}&rel=0&modestbranding=1&origin=${encodeURIComponent(window.location.origin)}`}
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        style={{ flex: 1, border: 'none', width: '100%', display: 'block', minHeight: 0 }}
+      />
+      <div style={{
+        background: '#18181b', padding: '7px 10px',
+        display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+      }}>
+        <span style={{
+          color: '#fff', fontSize: '11px', flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {activeVideo.title}
+        </span>
+        <button
+          onClick={() => pipWindowRef.current?.close()}
+          style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '2px', lineHeight: 1, fontSize: '14px' }}
+          title="Cerrar"
+        >
+          ✕
+        </button>
+      </div>
+    </>,
+    pipWindowRef.current.document.body
+  )
+
+  // ─── Layout classes ──────────────────────────────────────────────────────────
+  // containerRef stays at the same JSX depth in both modes — only CSS changes.
+  const outerCls = mini
+    ? 'fixed bottom-4 right-4 z-50 w-72 rounded-xl overflow-hidden shadow-2xl bg-zinc-900'
+    : 'fixed inset-0 z-50 bg-black/90 overflow-y-auto'
+  const centerCls = mini ? '' : 'flex min-h-full items-center justify-center p-4'
+  const contentCls = mini ? '' : 'relative w-full max-w-6xl flex flex-col lg:flex-row gap-4 items-stretch'
+  const leftColCls = mini ? '' : 'flex-1 flex flex-col gap-2 min-w-0'
+  const playerAreaCls = mini
+    ? 'relative w-full aspect-video bg-black cursor-pointer'
+    : 'relative w-full aspect-video bg-black rounded-xl overflow-hidden'
+
+  const modal = createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/90 overflow-y-auto"
-      onClick={(e) => { if (e.target === e.currentTarget) setConfirmingClose(true) }}
+      className={outerCls}
+      onClick={!mini ? (e) => { if (e.target === e.currentTarget) setConfirmingClose(true) } : undefined}
     >
       <div
-        className="flex min-h-full items-center justify-center p-4"
-        onClick={(e) => { if (e.target === e.currentTarget) setConfirmingClose(true) }}
+        className={centerCls}
+        onClick={!mini ? (e) => { if (e.target === e.currentTarget) setConfirmingClose(true) } : undefined}
       >
-        <div className="relative w-full max-w-6xl flex flex-col lg:flex-row gap-4 items-stretch">
+        <div className={contentCls}>
 
-          {/* Close button */}
-          <button
-            onClick={() => setConfirmingClose(true)}
-            className="absolute -top-2 -right-2 z-30 flex items-center justify-center size-8 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white/70 hover:text-white transition-colors shadow-lg"
-            title="Cerrar"
-          >
-            <X className="size-4" />
-          </button>
+          {/* Close button — full mode only */}
+          {!mini && (
+            <button
+              onClick={() => setConfirmingClose(true)}
+              className="absolute -top-2 -right-2 z-30 flex items-center justify-center size-8 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white/70 hover:text-white transition-colors shadow-lg"
+              title="Cerrar"
+            >
+              <X className="size-4" />
+            </button>
+          )}
 
-          {/* Left: player + countdown + info bar */}
-          <div className="flex-1 flex flex-col gap-2 min-w-0">
+          <div className={leftColCls}>
 
-            {/* Player */}
-            <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
+            {/* ── Player area — containerRef is always here ── */}
+            <div className={playerAreaCls}>
               {embedError ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-900">
                   <p className="text-sm text-white/60">Este video no permite reproducción embebida</p>
                   <a
                     href={ytUrl}
@@ -273,8 +367,30 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
                 <div ref={containerRef} className="w-full h-full" />
               )}
 
-              {/* Confirm close overlay — inside player so it covers the iframe */}
-              {confirmingClose && (
+              {/* Mini mode: hover overlay with expand + close */}
+              {mini && (
+                <div className="absolute inset-0 flex flex-col justify-between opacity-0 hover:opacity-100 transition-opacity duration-150">
+                  <div className="flex justify-end gap-1 p-1.5 bg-gradient-to-b from-black/60 to-transparent">
+                    <button
+                      onClick={onExpand}
+                      className="flex items-center justify-center size-6 rounded bg-black/70 hover:bg-black/90 text-white transition-colors"
+                      title="Expandir"
+                    >
+                      <Maximize2 className="size-3" />
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="flex items-center justify-center size-6 rounded bg-black/70 hover:bg-black/90 text-white transition-colors"
+                      title="Cerrar"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Full mode: confirm close overlay */}
+              {!mini && confirmingClose && (
                 <div
                   className="absolute inset-0 z-20 bg-black/70 flex items-center justify-center"
                   onKeyDown={e => {
@@ -309,9 +425,10 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
                 </div>
               )}
             </div>
+            {/* ── /Player area ── */}
 
-            {/* Autoplay countdown — OUTSIDE overflow-hidden, so it's never clipped by the iframe */}
-            {countdownVideo && (
+            {/* Full mode: autoplay countdown */}
+            {!mini && countdownVideo && (
               <div className="flex items-center gap-3 bg-zinc-900 border border-white/10 rounded-xl p-3">
                 {countdownVideo.thumbnail_url && (
                   <img src={countdownVideo.thumbnail_url} alt="" className="w-16 aspect-video rounded object-cover shrink-0" />
@@ -338,96 +455,149 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onP
               </div>
             )}
 
-            {/* Info bar */}
-            <div className="flex items-center gap-3 mt-1">
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-sm line-clamp-1">{activeVideo.title}</p>
-                {channelName && <p className="text-white/50 text-xs mt-0.5">{channelName}</p>}
+            {/* Full mode: info bar */}
+            {!mini && (
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-sm line-clamp-1">{activeVideo.title}</p>
+                  {channelName && <p className="text-white/50 text-xs mt-0.5">{channelName}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {watched && onWatched && (
+                    <span className="flex items-center gap-1.5 text-xs text-green-400">
+                      <CheckCircle className="size-3.5" /> Marcado como visto
+                    </span>
+                  )}
+                  {window.documentPictureInPicture && (
+                    <Button
+                      variant="ghost" size="icon"
+                      className="size-8 text-white/50 hover:text-white"
+                      onClick={openDocPiP}
+                      title="Flotar sobre otras pestañas"
+                    >
+                      <PictureInPicture2 className="size-4" />
+                    </Button>
+                  )}
+                  <a href={ytUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="icon" className="size-8 text-white/50 hover:text-white">
+                      <ExternalLink className="size-4" />
+                    </Button>
+                  </a>
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {watched && onWatched && (
-                  <span className="flex items-center gap-1.5 text-xs text-green-400">
-                    <CheckCircle className="size-3.5" /> Marcado como visto
-                  </span>
-                )}
-                <a href={ytUrl} target="_blank" rel="noopener noreferrer">
-                  <Button variant="ghost" size="icon" className="size-8 text-white/50 hover:text-white">
-                    <ExternalLink className="size-4" />
-                  </Button>
-                </a>
-              </div>
-            </div>
+            )}
+
           </div>
 
-          {/* Right: sidebar */}
-          <div className="flex w-full lg:w-64 xl:w-72 shrink-0 flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden max-h-[50vh] lg:max-h-[calc(100vh-8rem)]">
-            <div className="flex border-b border-white/10 shrink-0">
-              {[
-                { id: 'cola', label: `Cola${queueList.length > 0 ? ` (${queueList.length})` : ''}` },
-                { id: 'recientes', label: 'Recientes' },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSidebarTab(tab.id)}
-                  className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 ${
-                    sidebarTab === tab.id ? 'text-white border-white' : 'text-white/50 border-transparent hover:text-white/80'
-                  }`}
+          {/* Full mode: sidebar */}
+          {!mini && (
+            <div className="flex w-full lg:w-64 xl:w-72 shrink-0 flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden max-h-[50vh] lg:max-h-[calc(100vh-8rem)]">
+              <div className="flex border-b border-white/10 shrink-0">
+                {[
+                  { id: 'cola', label: `Cola${queueList.length > 0 ? ` (${queueList.length})` : ''}` },
+                  { id: 'recientes', label: 'Recientes' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSidebarTab(tab.id)}
+                    className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors border-b-2 ${
+                      sidebarTab === tab.id ? 'text-white border-white' : 'text-white/50 border-transparent hover:text-white/80'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div className="px-2 py-1.5 border-b border-white/10 shrink-0 flex justify-end">
+                <Badge
+                  variant={filterShorts ? 'secondary' : 'outline'}
+                  className="cursor-pointer select-none text-xs"
+                  onClick={() => setFilterShorts(f => !f)}
                 >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="px-2 py-1.5 border-b border-white/10 shrink-0 flex justify-end">
-              <Badge
-                variant={filterShorts ? 'secondary' : 'outline'}
-                className="cursor-pointer select-none text-xs"
-                onClick={() => setFilterShorts(f => !f)}
-              >
-                Sin Shorts
-              </Badge>
-            </div>
+                  Sin Shorts
+                </Badge>
+              </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5">
-              {sidebarTab === 'cola' && (() => {
-                const visible = filterShorts
-                  ? queueList.filter(v => !v.duration || isoToSeconds(v.duration) > 180)
-                  : queueList
-                return visible.length === 0
-                  ? <p className="text-xs text-white/40 text-center py-10">Cola vacía</p>
-                  : visible.map(v => (
-                      <SidebarItem
-                        key={v.video_id ?? v.videoId}
-                        video={v}
-                        isCurrent={(v.video_id ?? v.videoId) === activeId}
-                        onClick={handlePlayVideo}
-                      />
-                    ))
-              })()}
+              <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-0.5">
+                {sidebarTab === 'cola' && (() => {
+                  const visible = filterShorts
+                    ? queueList.filter(v => !v.duration || isoToSeconds(v.duration) > 180)
+                    : queueList
+                  return visible.length === 0
+                    ? <p className="text-xs text-white/40 text-center py-10">Cola vacía</p>
+                    : visible.map(v => (
+                        <SidebarItem
+                          key={v.video_id ?? v.videoId}
+                          video={v}
+                          isCurrent={(v.video_id ?? v.videoId) === activeId}
+                          onClick={handlePlayVideo}
+                        />
+                      ))
+                })()}
 
-              {sidebarTab === 'recientes' && (() => {
-                const visible = filterShorts
-                  ? recentVideos.filter(v => isoToSeconds(v.duration) > 180)
-                  : recentVideos
-                return recentLoading
-                  ? <SidebarSkeleton />
-                  : recentError
-                    ? <p className="text-xs text-red-400/80 text-center py-10 px-3">{recentError}</p>
-                    : visible.length === 0
-                      ? <p className="text-xs text-white/40 text-center py-10">Sin videos recientes</p>
-                      : visible.map(v => (
-                          <SidebarItem
-                            key={v.video_id}
-                            video={v}
-                            isCurrent={false}
-                            onClick={handlePlayVideo}
-                          />
-                        ))
-              })()}
+                {sidebarTab === 'recientes' && (() => {
+                  const visible = filterShorts
+                    ? recentVideos.filter(v => isoToSeconds(v.duration) > 180)
+                    : recentVideos
+                  return recentLoading
+                    ? <SidebarSkeleton />
+                    : recentError
+                      ? <p className="text-xs text-red-400/80 text-center py-10 px-3">{recentError}</p>
+                      : visible.length === 0
+                        ? <p className="text-xs text-white/40 text-center py-10">Sin videos recientes</p>
+                        : visible.map(v => (
+                            <SidebarItem
+                              key={v.video_id}
+                              video={v}
+                              isCurrent={false}
+                              onClick={handlePlayVideo}
+                            />
+                          ))
+                })()}
+              </div>
             </div>
-          </div>
+          )}
+
         </div>
       </div>
+
+      {/* Mini mode: title bar */}
+      {mini && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-zinc-900">
+          <p
+            className="text-white text-xs font-medium flex-1 line-clamp-1 cursor-pointer hover:text-white/80 transition-colors"
+            onClick={onExpand}
+          >
+            {activeVideo.title}
+          </p>
+          {window.documentPictureInPicture && (
+            <button
+              onClick={openDocPiP}
+              className="flex items-center justify-center size-5 text-white/60 hover:text-white transition-colors shrink-0"
+              title="Flotar sobre otras pestañas"
+            >
+              <PictureInPicture2 className="size-3" />
+            </button>
+          )}
+          <button
+            onClick={onExpand}
+            className="flex items-center justify-center size-5 text-white/60 hover:text-white transition-colors shrink-0"
+            title="Expandir"
+          >
+            <Maximize2 className="size-3" />
+          </button>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center size-5 text-white/60 hover:text-white transition-colors shrink-0"
+            title="Cerrar"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
     </div>,
     document.body
   )
+
+  return <>{modal}{pipPortal}</>
 }

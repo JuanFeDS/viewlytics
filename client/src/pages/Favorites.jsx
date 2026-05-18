@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Star, Trash2, Eye, ArrowUpDown, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
-import VideoPlayerModal from '@/components/VideoPlayerModal'
+import { usePlayer } from '@/hooks/usePlayer'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -89,7 +89,7 @@ export default function Favorites() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sort, setSort] = useState('newest')
-  const [playerVideo, setPlayerVideo] = useState(null)
+  const { open: openPlayer } = usePlayer()
 
   useEffect(() => {
     api.get('/favorites')
@@ -141,13 +141,6 @@ export default function Favorites() {
   const sorted = sortVideos(videos, sort)
 
   return (
-    <>
-    <VideoPlayerModal
-      video={playerVideo}
-      onClose={() => setPlayerVideo(null)}
-      queue={sorted}
-      onPlayVideo={setPlayerVideo}
-    />
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Badge variant="outline" className="gap-1.5">
@@ -177,10 +170,9 @@ export default function Favorites() {
         <EmptyState icon={Star} title="Sin favoritos" description="Guarda videos desde la búsqueda para verlos aquí" />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {sorted.map(v => <VideoCard key={v.id} v={v} onRemove={remove} onPlay={setPlayerVideo} />)}
+          {sorted.map(v => <VideoCard key={v.id} v={v} onRemove={remove} onPlay={(v) => openPlayer(v, sorted)} />)}
         </div>
       )}
     </div>
-    </>
   )
 }
