@@ -43,8 +43,8 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const logout = async () => {
-    await supabase.auth.signOut().catch(() => {})
+  const logout = () => {
+    supabase.auth.signOut({ scope: 'local' }).catch(() => {})
     window.location.replace(window.location.origin + '/viewlytics/')
   }
 
