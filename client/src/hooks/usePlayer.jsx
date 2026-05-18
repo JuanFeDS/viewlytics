@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 
 const PlayerContext = createContext(null)
 
@@ -6,9 +6,6 @@ export function PlayerProvider({ children }) {
   const [video, setVideo] = useState(null)
   const [queue, setQueue] = useState([])
   const [mini, setMini] = useState(false)
-
-  // VideoPlayerModal registers its openDocPiP fn here so RouteWatcher can call it
-  const pipRequestRef = useRef(null)
 
   function open(v, q = []) {
     setVideo(v)
@@ -26,7 +23,6 @@ export function PlayerProvider({ children }) {
       open, close,
       minimize: () => setMini(true),
       expand: () => setMini(false),
-      pipRequestRef,
     }}>
       {children}
     </PlayerContext.Provider>

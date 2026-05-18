@@ -57,16 +57,15 @@ function PageHeader() {
   )
 }
 
-// Handles player behavior on navigation and browser tab switches
+// Minimizes the player when navigating between pages
 function RouteWatcher() {
   const location = useLocation()
-  const { video, mini, minimize, pipRequestRef } = usePlayer()
+  const { video, mini, minimize } = usePlayer()
   const prevPath = useRef(location.pathname)
   const playerState = useRef({ video, mini, minimize })
 
   playerState.current = { video, mini, minimize }
 
-  // Minimize on in-app navigation
   useEffect(() => {
     if (location.pathname !== prevPath.current) {
       const { video, mini, minimize } = playerState.current
@@ -74,25 +73,6 @@ function RouteWatcher() {
       prevPath.current = location.pathname
     }
   }, [location.pathname])
-
-  // On browser tab switch: try Document PiP first, fall back to mini-player
-  useEffect(() => {
-    const handler = async () => {
-      if (document.visibilityState !== 'hidden') return
-      const { video, mini, minimize } = playerState.current
-      if (!video || mini) return
-
-      const pipFn = pipRequestRef?.current
-      if (pipFn) {
-        const opened = await pipFn()
-        if (!opened) minimize()
-      } else {
-        minimize()
-      }
-    }
-    document.addEventListener('visibilitychange', handler)
-    return () => document.removeEventListener('visibilitychange', handler)
-  }, [pipRequestRef])
 
   return null
 }
