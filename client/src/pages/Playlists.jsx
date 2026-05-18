@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ListVideo, ChevronRight, ArrowLeft, Clock, Star, ExternalLink, Play } from 'lucide-react'
 import api from '@/lib/api'
-import VideoPlayerModal from '@/components/VideoPlayerModal'
+import { usePlayer } from '@/hooks/usePlayer'
 import { useSavedIds } from '@/hooks/useSavedIds'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -54,9 +54,9 @@ export default function Playlists() {
   const [loadingPlaylists, setLoadingPlaylists] = useState(true)
   const [loadingItems, setLoadingItems] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
-  const [playing, setPlaying] = useState(null)
 
   const { pendingIds, favIds, addToPending, removeFromPending, addToFavorites, removeFromFavorites } = useSavedIds()
+  const { open: openPlayer } = usePlayer()
 
   useEffect(() => {
     api.get('/playlists').then(r => {
@@ -156,7 +156,7 @@ export default function Playlists() {
                             {item.snippet.thumbnails?.default?.url && (
                               <div
                                 role="button"
-                                onClick={() => setPlaying(toNormalized(item))}
+                                onClick={() => openPlayer(toNormalized(item), items.map(toNormalized))}
                                 className="relative cursor-pointer group/thumb shrink-0"
                               >
                                 <img
@@ -220,13 +220,6 @@ export default function Playlists() {
       </div>
     </div>
 
-    {playing && (
-      <VideoPlayerModal
-        video={playing}
-        queue={items.map(toNormalized)}
-        onClose={() => setPlaying(null)}
-      />
-    )}
     </>
   )
 }

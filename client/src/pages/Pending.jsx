@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle, Trash2, Clock, Eye, ArrowUpDown, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
-import VideoPlayerModal from '@/components/VideoPlayerModal'
+import { usePlayer } from '@/hooks/usePlayer'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -94,7 +94,7 @@ export default function Pending() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sort, setSort] = useState('newest')
-  const [playing, setPlaying] = useState(null)
+  const { open: openPlayer } = usePlayer()
 
   useEffect(() => {
     api.get('/pending')
@@ -157,7 +157,6 @@ export default function Pending() {
   const watched = sortVideos(videos.filter(v => v.watched_at), sort)
 
   return (
-    <>
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex gap-2">
@@ -199,7 +198,7 @@ export default function Pending() {
             <EmptyState icon={Clock} title="No hay videos pendientes" description="Busca videos y agrégalos desde la sección Buscar" />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {pending.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} onPlay={setPlaying} />)}
+              {pending.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} onPlay={(v) => openPlayer(v, videos)} />)}
             </div>
           )}
         </TabsContent>
@@ -209,20 +208,11 @@ export default function Pending() {
             <EmptyState icon={Eye} title="Sin videos vistos" description="Marca videos como vistos para verlos aquí" />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {watched.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} onPlay={setPlaying} />)}
+              {watched.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} onPlay={(v) => openPlayer(v, videos)} />)}
             </div>
           )}
         </TabsContent>
       </Tabs>
     </div>
-
-    {playing && (
-      <VideoPlayerModal
-        video={playing}
-        queue={videos}
-        onClose={() => setPlaying(null)}
-      />
-    )}
-    </>
   )
 }

@@ -1,11 +1,13 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { ThemeProvider } from '@/hooks/useTheme'
+import { PlayerProvider, usePlayer } from '@/hooks/usePlayer'
 import AppSidebar from '@/components/layout/AppSidebar'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import VideoPlayerModal from '@/components/VideoPlayerModal'
 import Login from '@/pages/Login'
 import { SavedIdsProvider } from '@/hooks/useSavedIds'
 import { LogOut } from 'lucide-react'
@@ -55,8 +57,49 @@ function PageHeader() {
   )
 }
 
+// Handles player behavior on navigation and browser tab switches
+function RouteWatcher() {
+  const location = useLocation()
+  const { video, mini, minimize, pipRequestRef } = usePlayer()
+  const prevPath = useRef(location.pathname)
+  const playerState = useRef({ video, mini, minimize })
+
+  playerState.current = { video, mini, minimize }
+
+  // Minimize on in-app navigation
+  useEffect(() => {
+    if (location.pathname !== prevPath.current) {
+      const { video, mini, minimize } = playerState.current
+      if (video && !mini) minimize()
+      prevPath.current = location.pathname
+    }
+  }, [location.pathname])
+
+  // On browser tab switch: try Document PiP first, fall back to mini-player
+  useEffect(() => {
+    const handler = async () => {
+      if (document.visibilityState !== 'hidden') return
+      const { video, mini, minimize } = playerState.current
+      if (!video || mini) return
+
+      const pipFn = pipRequestRef?.current
+      if (pipFn) {
+        const opened = await pipFn()
+        if (!opened) minimize()
+      } else {
+        minimize()
+      }
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [pipRequestRef])
+
+  return null
+}
+
 function AppLayout() {
   const { user } = useAuth()
+  const { video, queue, mini, close, expand } = usePlayer()
 
   if (user === undefined) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -72,6 +115,7 @@ function AppLayout() {
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <PageHeader />
+          <RouteWatcher />
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Navigate to="/subscriptions" replace />} />
@@ -85,6 +129,16 @@ function AppLayout() {
           </main>
         </div>
       </div>
+
+      {video && (
+        <VideoPlayerModal
+          video={video}
+          queue={queue}
+          mini={mini}
+          onClose={close}
+          onExpand={expand}
+        />
+      )}
     </SidebarProvider>
     </SavedIdsProvider>
   )
@@ -95,8 +149,10 @@ export default function App() {
     <ThemeProvider>
       <BrowserRouter basename="/viewlytics">
         <AuthProvider>
-          <AppLayout />
-          <Toaster richColors position="bottom-right" />
+          <PlayerProvider>
+            <AppLayout />
+            <Toaster richColors position="bottom-right" />
+          </PlayerProvider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
