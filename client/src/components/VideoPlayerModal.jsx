@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, ExternalLink, CheckCircle, Play, Maximize2, PictureInPicture2 } from 'lucide-react'
+import { X, ExternalLink, CheckCircle, Play, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { isoToSeconds, fetchChannelVideos, resolveChannelId as resolveChannelIdUtil } from '@/lib/youtube'
-import { usePlayer } from '@/hooks/usePlayer'
 
 function loadYouTubeAPI() {
   return new Promise((resolve) => {
@@ -64,13 +63,6 @@ const AUTOPLAY_SECONDS = 5
 export default function VideoPlayerModal({ video, onClose, onWatched, queue, onExpand, mini }) {
   const playerRef = useRef(null)
   const containerRef = useRef(null)
-  const { pipRequestRef } = usePlayer()
-
-  // Document Picture-in-Picture state
-  const [pipOpen, setPipOpen] = useState(false)
-  const pipWindowRef = useRef(null)
-  const pipStartRef = useRef(0)       // last known playback position (seconds)
-  const openDocPiPRef = useRef(null)  // always-fresh ref to openDocPiP
 
   /**
    * The YouTube IFrame API creates callbacks (onStateChange, onError) once at player
@@ -220,60 +212,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
     return () => window.removeEventListener('keydown', handler)
   }, [confirmingClose, mini])
 
-  // Save playback position every 2s so PiP can start from the right spot
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const t = playerRef.current?.getCurrentTime?.()
-      if (typeof t === 'number') pipStartRef.current = Math.floor(t)
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Register openDocPiP in context so RouteWatcher can trigger it
-  useEffect(() => {
-    if (!pipRequestRef) return
-    pipRequestRef.current = () => openDocPiPRef.current?.()
-    return () => { pipRequestRef.current = null }
-  }, [pipRequestRef])
-
-  async function openDocPiP() {
-    if (!window.documentPictureInPicture) return false
-    if (pipWindowRef.current && !pipWindowRef.current.closed) return true
-
-    try {
-      playerRef.current?.pauseVideo?.()
-
-      const pip = await window.documentPictureInPicture.requestWindow({
-        width: 336,
-        height: 229, // 336×(9/16) = 189px video + 40px title bar
-      })
-
-      // Set base href so YouTube's embed can verify the origin (fixes Error 153)
-      const base = pip.document.createElement('base')
-      base.href = window.location.origin
-      pip.document.head.appendChild(base)
-
-      // Minimal reset so the pip document is clean
-      pip.document.documentElement.style.cssText =
-        'margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden'
-      pip.document.body.style.cssText =
-        'margin:0;padding:0;width:100%;height:100%;display:flex;flex-direction:column'
-
-      pipWindowRef.current = pip
-      setPipOpen(true)
-
-      pip.addEventListener('pagehide', () => {
-        pipWindowRef.current = null
-        setPipOpen(false)
-      })
-
-      return true
-    } catch {
-      return false
-    }
-  }
-  openDocPiPRef.current = openDocPiP
-
   const handlePlayVideo = (v) => setActiveVideo(v)
   handlePlayVideoRef.current = handlePlayVideo
 
@@ -281,37 +219,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
 
   const ytUrl = `https://www.youtube.com/watch?v=${activeId}`
   const channelName = activeVideo.channel_title ?? activeVideo.channelTitle
-
-  // ─── Document PiP portal ────────────────────────────────────────────────────
-  const pipPortal = pipOpen && pipWindowRef.current && createPortal(
-    <>
-      <iframe
-        key={activeId}
-        src={`https://www.youtube.com/embed/${activeId}?autoplay=1&start=${pipStartRef.current}&rel=0&modestbranding=1&origin=${encodeURIComponent(window.location.origin)}`}
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        style={{ flex: 1, border: 'none', width: '100%', display: 'block', minHeight: 0 }}
-      />
-      <div style={{
-        background: '#18181b', padding: '7px 10px',
-        display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
-      }}>
-        <span style={{
-          color: '#fff', fontSize: '11px', flex: 1,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {activeVideo.title}
-        </span>
-        <button
-          onClick={() => pipWindowRef.current?.close()}
-          style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '2px', lineHeight: 1, fontSize: '14px' }}
-          title="Cerrar"
-        >
-          ✕
-        </button>
-      </div>
-    </>,
-    pipWindowRef.current.document.body
-  )
 
   // ─── Layout classes ──────────────────────────────────────────────────────────
   // containerRef stays at the same JSX depth in both modes — only CSS changes.
@@ -468,16 +375,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
                       <CheckCircle className="size-3.5" /> Marcado como visto
                     </span>
                   )}
-                  {window.documentPictureInPicture && (
-                    <Button
-                      variant="ghost" size="icon"
-                      className="size-8 text-white/50 hover:text-white"
-                      onClick={openDocPiP}
-                      title="Flotar sobre otras pestañas"
-                    >
-                      <PictureInPicture2 className="size-4" />
-                    </Button>
-                  )}
                   <a href={ytUrl} target="_blank" rel="noopener noreferrer">
                     <Button variant="ghost" size="icon" className="size-8 text-white/50 hover:text-white">
                       <ExternalLink className="size-4" />
@@ -570,15 +467,6 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
           >
             {activeVideo.title}
           </p>
-          {window.documentPictureInPicture && (
-            <button
-              onClick={openDocPiP}
-              className="flex items-center justify-center size-5 text-white/60 hover:text-white transition-colors shrink-0"
-              title="Flotar sobre otras pestañas"
-            >
-              <PictureInPicture2 className="size-3" />
-            </button>
-          )}
           <button
             onClick={onExpand}
             className="flex items-center justify-center size-5 text-white/60 hover:text-white transition-colors shrink-0"
@@ -599,5 +487,5 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
     document.body
   )
 
-  return <>{modal}{pipPortal}</>
+  return <>{modal}</>
 }
