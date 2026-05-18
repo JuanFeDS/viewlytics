@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, Trash2, Clock, Eye, ArrowUpDown } from 'lucide-react'
+import { CheckCircle, Trash2, Clock, Eye, ArrowUpDown, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
+import VideoPlayerModal from '@/components/VideoPlayerModal'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -18,12 +18,10 @@ function VideoSkeleton() {
   )
 }
 
-function VideoCard({ v, onWatched, onRemove }) {
-  const ytUrl = `https://www.youtube.com/watch?v=${v.video_id}`
-
+function VideoCard({ v, onWatched, onRemove, onPlay }) {
   return (
     <div className="group relative flex flex-col gap-2">
-      {/* Action buttons — outside the link, absolutely positioned */}
+      {/* Action buttons */}
       <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
         {!v.watched_at && (
           <button
@@ -44,23 +42,30 @@ function VideoCard({ v, onWatched, onRemove }) {
       </div>
 
       {/* Thumbnail */}
-      <a href={ytUrl} target="_blank" rel="noopener noreferrer"
-        className="relative block w-full aspect-video rounded-xl overflow-hidden bg-muted"
+      <div
+        role="button"
+        onClick={() => onPlay(v)}
+        className="relative block w-full aspect-video rounded-xl overflow-hidden bg-muted cursor-pointer"
       >
         {v.thumbnail_url
           ? <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
           : <div className="w-full h-full flex items-center justify-center"><Eye className="size-8 text-muted-foreground/40" /></div>
         }
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
-      </a>
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-full p-2">
+            <Play className="size-5 text-white fill-white" />
+          </div>
+        </div>
+      </div>
 
       {/* Info */}
       <div className="flex flex-col gap-0.5 px-0.5">
-        <a href={ytUrl} target="_blank" rel="noopener noreferrer"
-          className="text-sm font-medium line-clamp-2 leading-snug hover:underline"
+        <button
+          onClick={() => onPlay(v)}
+          className="text-sm font-medium line-clamp-2 leading-snug hover:underline text-left"
         >
           {v.title || <span className="text-muted-foreground italic">Sin título</span>}
-        </a>
+        </button>
         <p className="text-xs text-muted-foreground truncate">{v.channel_title || '—'}</p>
         <p className="text-xs text-muted-foreground">
           {new Date(v.added_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -89,6 +94,7 @@ export default function Pending() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sort, setSort] = useState('newest')
+  const [playing, setPlaying] = useState(null)
 
   useEffect(() => {
     api.get('/pending')
@@ -151,6 +157,7 @@ export default function Pending() {
   const watched = sortVideos(videos.filter(v => v.watched_at), sort)
 
   return (
+    <>
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex gap-2">
@@ -192,7 +199,7 @@ export default function Pending() {
             <EmptyState icon={Clock} title="No hay videos pendientes" description="Busca videos y agrégalos desde la sección Buscar" />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {pending.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} />)}
+              {pending.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} onPlay={setPlaying} />)}
             </div>
           )}
         </TabsContent>
@@ -202,11 +209,20 @@ export default function Pending() {
             <EmptyState icon={Eye} title="Sin videos vistos" description="Marca videos como vistos para verlos aquí" />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {watched.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} />)}
+              {watched.map(v => <VideoCard key={v.id} v={v} onWatched={markWatched} onRemove={remove} onPlay={setPlaying} />)}
             </div>
           )}
         </TabsContent>
       </Tabs>
     </div>
+
+    {playing && (
+      <VideoPlayerModal
+        video={playing}
+        queue={videos}
+        onClose={() => setPlaying(null)}
+      />
+    )}
+    </>
   )
 }
