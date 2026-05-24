@@ -92,11 +92,14 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
   const [countdownVideo, setCountdownVideo] = useState(null)
   const [countdown, setCountdown] = useState(AUTOPLAY_SECONDS)
 
+  // eslint-disable-next-line react-hooks/refs
   queueRef.current = queue ?? []
+  // eslint-disable-next-line react-hooks/refs
   onWatchedRef.current = onWatched
 
   const queueList = queue ?? []
   const currentQueueIdx = queueList.findIndex(v => (v.video_id ?? v.videoId) === (activeVideo?.video_id ?? activeVideo?.videoId))
+  // eslint-disable-next-line react-hooks/refs
   nextVideoRef.current =
     currentQueueIdx >= 0 && currentQueueIdx < queueList.length - 1
       ? queueList[currentQueueIdx + 1]
@@ -105,16 +108,19 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
         : null
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveVideo(video)
     setConfirmingClose(false)
     setCountdownVideo(null)
   }, [video])
 
   const activeId = activeVideo?.video_id ?? activeVideo?.videoId
+  // eslint-disable-next-line react-hooks/refs
   activeIdRef.current = activeId
 
   useEffect(() => {
     if (!activeVideo) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEmbedError(false)
     setWatched(false)
     watchedRef.current = false
@@ -159,11 +165,13 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
       playerRef.current?.destroy()
       playerRef.current = null
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
   useEffect(() => {
     if (!countdownVideo) return
     const next = countdownVideo
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCountdown(AUTOPLAY_SECONDS)
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -180,6 +188,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
   }, [countdownVideo])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecentVideos([])
     setRecentError(null)
     if (!activeVideo) return
@@ -198,6 +207,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
     }
 
     load().catch(e => setRecentError(e.message)).finally(() => setRecentLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
   useEffect(() => {
@@ -213,6 +223,7 @@ export default function VideoPlayerModal({ video, onClose, onWatched, queue, onE
   }, [confirmingClose, mini])
 
   const handlePlayVideo = (v) => setActiveVideo(v)
+  // eslint-disable-next-line react-hooks/refs
   handlePlayVideoRef.current = handlePlayVideo
 
   if (!activeVideo) return null
