@@ -1,0 +1,22 @@
+[
+  {
+    "id": { "videoId": "vid-search-1" },
+    "snippet": {
+      "title": "Learn React in 30 Minutes",
+      "channelTitle": "Fireship",
+      "channelId": "UC-fireship",
+      "thumbnails": { "medium": { "url": "https://i.ytimg.com/vi/vid-search-1/mqdefault.jpg" } },
+      "publishedAt": "2026-05-01T00:00:00Z"
+    }
+  },
+  {
+    "id": { "videoId": "vid-search-2" },
+    "snippet": {
+      "title": "TypeScript for Beginners",
+      "channelTitle": "Theo - t3.gg",
+      "channelId": "UC-theo",
+      "thumbnails": { "medium": { "url": "https://i.ytimg.com/vi/vid-search-2/mqdefault.jpg" } },
+      "publishedAt": "2026-04-15T00:00:00Z"
+    }
+  }
+]
