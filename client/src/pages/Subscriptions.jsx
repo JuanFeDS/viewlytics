@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Tag, X, Users, Loader2, RefreshCw } from 'lucide-react'
 import api from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent } from '@/components/ui/card'
@@ -37,16 +38,29 @@ export default function Subscriptions() {
   const [filterCat, setFilterCat] = useState(null)
   const [search, setSearch] = useState('')
   const [selectedChannel, setSelectedChannel] = useState(null)
+  const [sortOrder, setSortOrder] = useState('youtube')
+  const [reviews, setReviews] = useState({}) // { channelId: last_reviewed_at }
 
   useEffect(() => {
-    api.get('/subscriptions')
-      .then(r => {
-        setSubscriptions(r.data.subscriptions ?? [])
-        setCategories(r.data.categories ?? [])
-        setMappings(r.data.mappings ?? [])
-      })
-      .catch(e => setError(e.response?.data?.error ?? e.message))
-      .finally(() => setLoading(false))
+    const loadData = async () => {
+      try {
+        const [subsRes, reviewsRes] = await Promise.all([
+          api.get('/subscriptions'),
+          supabase.from('channel_reviews').select('channel_id, last_reviewed_at'),
+        ])
+        setSubscriptions(subsRes.data.subscriptions ?? [])
+        setCategories(subsRes.data.categories ?? [])
+        setMappings(subsRes.data.mappings ?? [])
+        const reviewMap = {}
+        for (const r of reviewsRes.data ?? []) reviewMap[r.channel_id] = r.last_reviewed_at
+        setReviews(reviewMap)
+      } catch (e) {
+        setError(e.response?.data?.error ?? e.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
   }, [])
 
   const [savingCat, setSavingCat] = useState(false)
@@ -102,9 +116,30 @@ export default function Subscriptions() {
   const getCategoriesForSub = (subId) =>
     mappings.filter(m => m.subscription_id === subId).map(m => categories.find(c => c.id === m.category_id)).filter(Boolean)
 
-  const filtered = subscriptions
+  const openChannel = async (channel) => {
+    setSelectedChannel(channel)
+    const { channelId } = channel
+    const now = new Date().toISOString()
+    setReviews(prev => ({ ...prev, [channelId]: now }))
+    await supabase.from('channel_reviews').upsert(
+      { channel_id: channelId, last_reviewed_at: now },
+      { onConflict: 'user_id,channel_id' }
+    )
+  }
+
+  const baseFiltered = subscriptions
     .filter(s => !filterCat || mappings.some(m => m.subscription_id === s.id && m.category_id === filterCat))
     .filter(s => !search || s.snippet.title.toLowerCase().includes(search.toLowerCase()))
+
+  const filtered = sortOrder === 'youtube' ? baseFiltered : [...baseFiltered].sort((a, b) => {
+    const aAt = reviews[a.snippet.resourceId.channelId]
+    const bAt = reviews[b.snippet.resourceId.channelId]
+    if (!aAt && !bAt) return 0
+    if (!aAt) return sortOrder === 'least-reviewed' ? -1 : 1
+    if (!bAt) return sortOrder === 'least-reviewed' ? 1 : -1
+    const diff = new Date(aAt) - new Date(bAt)
+    return sortOrder === 'least-reviewed' ? diff : -diff
+  })
 
   return (
     <div className="p-6 space-y-5">
@@ -156,6 +191,21 @@ export default function Subscriptions() {
           onChange={e => setSearch(e.target.value)}
           className="max-w-xs h-8 text-sm"
         />
+        {[
+          { value: 'youtube', label: 'Orden YouTube' },
+          { value: 'least-reviewed', label: 'Menos revisados' },
+          { value: 'most-reviewed', label: 'Recién revisados' },
+        ].map(opt => (
+          <Button
+            key={opt.value}
+            variant={sortOrder === opt.value ? 'default' : 'outline'}
+            size="sm"
+            className="h-8"
+            onClick={() => setSortOrder(opt.value)}
+          >
+            {opt.label}
+          </Button>
+        ))}
         <Button
           variant={filterCat === null ? 'default' : 'outline'}
           size="sm"
@@ -211,7 +261,7 @@ export default function Subscriptions() {
               <Card
                 key={sub.id}
                 className="hover:shadow-md hover:border-primary/40 transition-all cursor-pointer"
-                onClick={() => setSelectedChannel({
+                onClick={() => openChannel({
                   channelId: sub.snippet.resourceId.channelId,
                   title: sub.snippet.title,
                   thumbnail: sub.snippet.thumbnails?.default?.url,
