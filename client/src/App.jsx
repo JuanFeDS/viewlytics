@@ -64,6 +64,7 @@ function RouteWatcher() {
   const prevPath = useRef(location.pathname)
   const playerState = useRef({ video, mini, minimize })
 
+  // eslint-disable-next-line react-hooks/refs
   playerState.current = { video, mini, minimize }
 
   useEffect(() => {

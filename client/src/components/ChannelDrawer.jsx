@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Star, Clock, X, Play } from 'lucide-react'
-import api from '@/lib/api'
 import VideoPlayerModal from '@/components/VideoPlayerModal'
 import { fetchChannelVideos } from '@/lib/youtube'
 import { parseDuration, formatViews, timeAgo, isoToSeconds } from '@/lib/youtube'
@@ -36,6 +35,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMounted(true)
     } else {
       const t = setTimeout(() => setMounted(false), 300)
@@ -46,6 +46,7 @@ export default function ChannelDrawer({ channel, open, onClose }) {
   useEffect(() => {
     if (!open || !channel?.channelId) return
     const controller = new AbortController()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVideos([])
     setLoading(true)
     setFilterShorts(true)
