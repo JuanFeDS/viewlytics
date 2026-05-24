@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "user_id": "test-user-id",
+    "video_id": "vid-fav-1",
+    "saved_at": "2026-05-18T09:00:00Z",
+    "title": "The Only Intro to Docker You Need",
+    "channel_id": "UC-fireship",
+    "channel_title": "Fireship",
+    "thumbnail_url": "https://i.ytimg.com/vi/vid-fav-1/hqdefault.jpg"
+  }
+]
