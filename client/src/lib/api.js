@@ -54,7 +54,7 @@ export async function* streamSSE(path, params = {}, signal) {
       buffer = lines.pop() ?? ''
       for (const line of lines) {
         if (line.startsWith('data: ')) {
-          try { yield JSON.parse(line.slice(6)) } catch {}
+          try { yield JSON.parse(line.slice(6)) } catch { /* ignore malformed SSE frames */ }
         }
       }
     }

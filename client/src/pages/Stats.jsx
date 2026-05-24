@@ -229,8 +229,8 @@ function TabSuscripciones({ data, loading, progress, message, onRefresh }) {
   const tc = theme === 'dark' ? '#9ca3af' : '#6b7280'
   const gc = theme === 'dark' ? '#374151' : '#f3f4f6'
 
-  const channels = data?.channels ?? []
-  const categoryStats = data?.categoryStats ?? []
+  const channels = useMemo(() => data?.channels ?? [], [data])
+  const categoryStats = useMemo(() => data?.categoryStats ?? [], [data])
 
   const filtered = useMemo(() => {
     if (filter === 'all') return channels

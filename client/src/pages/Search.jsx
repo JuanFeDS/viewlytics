@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Search as SearchIcon, Plus, Star, Clock, Play } from 'lucide-react'
 import api from '@/lib/api'
 import { usePlayer } from '@/hooks/usePlayer'
