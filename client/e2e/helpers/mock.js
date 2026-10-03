@@ -89,6 +89,14 @@ export async function mockRoutes(page) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
   })
 
+  // Supabase REST — user_preferences
+  await page.route(`${base}/rest/v1/user_preferences*`, async route => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture('user-preferences')) })
+    }
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+  })
+
   // YouTube Data API (called directly from browser for channel videos in drawer)
   await page.route('**/youtube/v3/**', route => route.fulfill({
     status: 200,

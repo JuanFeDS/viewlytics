@@ -60,8 +60,24 @@ export default function Subscriptions() {
         setLoading(false)
       }
     }
+
+    const loadPrefs = async () => {
+      const { data } = await supabase.from('user_preferences').select('subs_sort_order').maybeSingle()
+      if (data?.subs_sort_order) setSortOrder(data.subs_sort_order)
+    }
+
     loadData()
+    loadPrefs()
   }, [])
+
+  const updateSortOrder = async (value) => {
+    setSortOrder(value)
+    const { data: { user } } = await supabase.auth.getUser()
+    supabase.from('user_preferences').upsert(
+      { user_id: user.id, subs_sort_order: value },
+      { onConflict: 'user_id' }
+    )
+  }
 
   const [savingCat, setSavingCat] = useState(false)
   const [assigningId, setAssigningId] = useState(null) // `${subId}-${catId}`
@@ -201,7 +217,7 @@ export default function Subscriptions() {
             variant={sortOrder === opt.value ? 'default' : 'outline'}
             size="sm"
             className="h-8"
-            onClick={() => setSortOrder(opt.value)}
+            onClick={() => updateSortOrder(opt.value)}
           >
             {opt.label}
           </Button>
